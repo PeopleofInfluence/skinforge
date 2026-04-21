@@ -1,0 +1,111 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --forge-bg: #0f1117;
+  --forge-panel: #161b22;
+  --forge-border: #21262d;
+  --forge-accent: #7c3aed;
+  --forge-text: #e6edf3;
+  --forge-text-muted: #8b949e;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  background-color: var(--forge-bg);
+  color: var(--forge-text);
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--forge-panel);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--forge-border);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--forge-text-muted);
+}
+
+/* Pixel editor canvas — disable antialiasing */
+canvas {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+/* Checkerboard background for transparent areas */
+.checkerboard {
+  background-image: linear-gradient(45deg, #2d2d2d 25%, transparent 25%),
+    linear-gradient(-45deg, #2d2d2d 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #2d2d2d 75%),
+    linear-gradient(-45deg, transparent 75%, #2d2d2d 75%);
+  background-size: 16px 16px;
+  background-position: 0 0, 0 8px, 8px -8px, -8px 0px;
+  background-color: #1a1a1a;
+}
+
+/* Panel transitions */
+.panel-enter {
+  transition: all 0.2s ease;
+}
+
+/* Tool button active state */
+.tool-active {
+  @apply bg-forge-accent text-white;
+}
+
+/* Layer item */
+.layer-item {
+  @apply flex items-center gap-2 px-3 py-2 rounded cursor-pointer hover:bg-forge-border transition-colors;
+}
+.layer-item.active {
+  @apply bg-forge-accent/20 border border-forge-accent/40;
+}
+
+/* Colour swatch */
+.colour-swatch {
+  @apply w-6 h-6 rounded cursor-pointer border-2 border-transparent hover:border-white transition-colors;
+}
+.colour-swatch.selected {
+  @apply border-white scale-110;
+}
+
+/* Skin library card */
+.skin-card {
+  @apply bg-forge-panel border border-forge-border rounded-lg overflow-hidden cursor-pointer hover:border-forge-accent/60 transition-colors;
+}
+
+/* Input styles */
+.forge-input {
+  @apply w-full bg-forge-border/60 border border-forge-border rounded-md px-3 py-2 text-sm text-forge-text placeholder:text-forge-text-muted focus:outline-none focus:border-forge-accent transition-colors;
+}
+
+/* Button variants */
+.btn-primary {
+  @apply bg-forge-accent hover:bg-forge-accent-hover text-white px-4 py-2 rounded-md text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed;
+}
+.btn-secondary {
+  @apply bg-forge-border hover:bg-forge-border/80 text-forge-text px-4 py-2 rounded-md text-sm font-medium transition-colors;
+}
+.btn-ghost {
+  @apply hover:bg-forge-border/60 text-forge-text-muted hover:text-forge-text px-3 py-1.5 rounded-md text-sm transition-colors;
+}
+.btn-danger {
+  @apply bg-red-900/40 hover:bg-red-800/60 text-red-400 px-4 py-2 rounded-md text-sm font-medium transition-colors;
+}

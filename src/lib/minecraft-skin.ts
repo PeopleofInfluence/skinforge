@@ -1,0 +1,192 @@
+/**
+ * Minecraft 64x64 skin UV layout utilities.
+ * All coordinates are in pixels on the 64x64 texture.
+ *
+ * Layout reference (modern format, since 1.8):
+ *
+ *  Head (8,8)–(16,16) front face
+ *  Head outer (40,8)–(48,16) front face
+ *  Body (20,20)–(28,32) front
+ *  Body outer (20,36)–(28,48) front
+ *  Right arm (44,20)–(48,32) front [classic: 4px wide, slim: 3px]
+ *  Left arm (36,52)–(40,64) front [classic: 4px wide, slim: 3px]
+ *  Right arm outer (44,36)–(48,48) front
+ *  Left arm outer (52,52)–(56,64) front
+ *  Right leg (4,20)–(8,32) front
+ *  Left leg (20,52)–(24,64) front
+ *  Right leg outer (4,36)–(8,48) front
+ *  Left leg outer (4,52)–(8,64) front
+ */
+
+export interface UVRect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+// Returns the primary front-face UV rect for each part
+export function getLayerUV(
+  layer: string,
+  bodyType: "classic" | "slim" = "classic"
+): UVRect {
+  const armWidth = bodyType === "slim" ? 3 : 4;
+
+  const uvMap: Record<string, UVRect> = {
+    head: { x: 8, y: 8, w: 8, h: 8 },
+    headOuter: { x: 40, y: 8, w: 8, h: 8 },
+    body: { x: 20, y: 20, w: 8, h: 12 },
+    bodyOuter: { x: 20, y: 36, w: 8, h: 12 },
+    rightArm: { x: 44, y: 20, w: armWidth, h: 12 },
+    rightArmOuter: { x: 44, y: 36, w: armWidth, h: 12 },
+    leftArm: { x: 36, y: 52, w: armWidth, h: 12 },
+    leftArmOuter: { x: 52, y: 52, w: armWidth, h: 12 },
+    rightLeg: { x: 4, y: 20, w: 4, h: 12 },
+    rightLegOuter: { x: 4, y: 36, w: 4, h: 12 },
+    leftLeg: { x: 20, y: 52, w: 4, h: 12 },
+    leftLegOuter: { x: 4, y: 52, w: 4, h: 12 },
+  };
+
+  return uvMap[layer] ?? { x: 0, y: 0, w: 8, h: 8 };
+}
+
+export const SKIN_WIDTH = 64;
+export const SKIN_HEIGHT = 64;
+
+/** Convert a 64x64 canvas to a PNG data URL */
+export function canvasToPng(canvas: HTMLCanvasElement): string {
+  return canvas.toDataURL("image/png");
+}
+
+/** Load a PNG data URL or File into a 64x64 ImageData */
+export async function loadSkinImageData(
+  source: string | File
+): Promise<ImageData> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = SKIN_WIDTH;
+      canvas.height = SKIN_HEIGHT;
+      const ctx = canvas.getContext("2d")!;
+      ctx.clearRect(0, 0, SKIN_WIDTH, SKIN_HEIGHT);
+      ctx.drawImage(img, 0, 0, SKIN_WIDTH, SKIN_HEIGHT);
+      resolve(ctx.getImageData(0, 0, SKIN_WIDTH, SKIN_HEIGHT));
+    };
+    img.onerror = reject;
+
+    if (source instanceof File) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        img.src = e.target!.result as string;
+      };
+      reader.readAsDataURL(source);
+    } else {
+      img.src = source;
+    }
+  });
+}
+
+/** Merge two skins: take outfit (body/arms/legs) from src1, face from src2 */
+export function mergeSkins(
+  base: ImageData,
+  overlay: ImageData
+): ImageData {
+  const result = new ImageData(SKIN_WIDTH, SKIN_HEIGHT);
+  // Copy entire base skin first
+  result.data.set(base.data);
+
+  // Copy head region from overlay (face texture: x=8,y=8 to x=16,y=16)
+  for (let y = 8; y < 16; y++) {
+    for (let x = 8; x < 16; x++) {
+      const idx = (y * SKIN_WIDTH + x) * 4;
+      result.data[idx] = overlay.data[idx];
+      result.data[idx + 1] = overlay.data[idx + 1];
+      result.data[idx + 2] = overlay.data[idx + 2];
+      result.data[idx + 3] = overlay.data[idx + 3];
+    }
+  }
+
+  return result;
+}
+
+/** Create a blank (all transparent) 64x64 skin ImageData */
+export function createBlankSkin(): ImageData {
+  return new ImageData(SKIN_WIDTH, SKIN_HEIGHT);
+}
+
+/** Flood fill algorithm for the paint bucket tool */
+export function floodFill(
+  imageData: ImageData,
+  startX: number,
+  startY: number,
+  fillColor: [number, number, number, number]
+): ImageData {
+  const data = new Uint8ClampedArray(imageData.data);
+  const width = imageData.width;
+  const height = imageData.height;
+
+  const startIdx = (startY * width + startX) * 4;
+  const targetColor: [number, number, number, number] = [
+    data[startIdx],
+    data[startIdx + 1],
+    data[startIdx + 2],
+    data[startIdx + 3],
+  ];
+
+  // If target color equals fill color, nothing to do
+  if (
+    targetColor[0] === fillColor[0] &&
+    targetColor[1] === fillColor[1] &&
+    targetColor[2] === fillColor[2] &&
+    targetColor[3] === fillColor[3]
+  ) {
+    return imageData;
+  }
+
+  const stack: [number, number][] = [[startX, startY]];
+  const visited = new Set<number>();
+
+  while (stack.length > 0) {
+    const [x, y] = stack.pop()!;
+    if (x < 0 || x >= width || y < 0 || y >= height) continue;
+
+    const key = y * width + x;
+    if (visited.has(key)) continue;
+    visited.add(key);
+
+    const idx = key * 4;
+    if (
+      data[idx] !== targetColor[0] ||
+      data[idx + 1] !== targetColor[1] ||
+      data[idx + 2] !== targetColor[2] ||
+      data[idx + 3] !== targetColor[3]
+    ) {
+      continue;
+    }
+
+    data[idx] = fillColor[0];
+    data[idx + 1] = fillColor[1];
+    data[idx + 2] = fillColor[2];
+    data[idx + 3] = fillColor[3];
+
+    stack.push([x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]);
+  }
+
+  return new ImageData(data, width, height);
+}
+
+/** Parse a hex color string (#RRGGBB or #RRGGBBAA) to RGBA */
+export function hexToRgba(hex: string): [number, number, number, number] {
+  const clean = hex.replace("#", "");
+  const r = parseInt(clean.slice(0, 2), 16);
+  const g = parseInt(clean.slice(2, 4), 16);
+  const b = parseInt(clean.slice(4, 6), 16);
+  const a = clean.length === 8 ? parseInt(clean.slice(6, 8), 16) : 255;
+  return [r, g, b, a];
+}
+
+/** Convert RGBA to hex */
+export function rgbaToHex(r: number, g: number, b: number): string {
+  return "#" + [r, g, b].map((v) => v.toString(16).padStart(2, "0")).join("");
+}
