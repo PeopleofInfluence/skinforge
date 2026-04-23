@@ -38,9 +38,11 @@ export function SkinPreview3D({
       height: container.clientHeight || 360,
     });
 
-    if (viewer.controls) {
-      viewer.controls.enableRotate = true;
-      viewer.controls.enableZoom = true;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const controls = (viewer as any).controls;
+    if (controls) {
+      controls.enableRotate = true;
+      controls.enableZoom = true;
     }
     viewer.autoRotate = rotating;
     viewer.autoRotateSpeed = 0.8;
