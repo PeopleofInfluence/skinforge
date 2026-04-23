@@ -39,13 +39,13 @@ export function SkinPreview3D({
     });
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const controls = (viewer as any).controls;
-    if (controls) {
-      controls.enableRotate = true;
-      controls.enableZoom = true;
+    const v = viewer as any;
+    if (v.controls) {
+      v.controls.enableRotate = true;
+      v.controls.enableZoom = true;
     }
-    viewer.autoRotate = rotating;
-    viewer.autoRotateSpeed = 0.8;
+    v.autoRotate = rotating;
+    v.autoRotateSpeed = 0.8;
 
     viewerRef.current = viewer;
     return viewer;
