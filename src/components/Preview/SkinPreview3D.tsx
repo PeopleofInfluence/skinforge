@@ -1,5 +1,6 @@
 "use client";
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useEffect, useRef, useCallback } from "react";
 import type { BodyType, AnimationType } from "@/types";
 
@@ -17,41 +18,34 @@ export function SkinPreview3D({
   rotating,
 }: SkinPreview3DProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const viewerRef = useRef<any>(null);
 
   const initViewer = useCallback(async () => {
     if (!containerRef.current) return;
 
-    // Dynamically import skinview3d (client-only)
-    const skinview3d = await import("skinview3d");
+    const skinview3d: any = await import("skinview3d");
 
-    // Dispose previous viewer
     if (viewerRef.current) {
       viewerRef.current.dispose();
     }
 
     const container = containerRef.current;
     const viewer = new skinview3d.SkinViewer({
-      canvas: container.querySelector("canvas") as HTMLCanvasElement,
+      canvas: container.querySelector("canvas"),
       width: container.clientWidth || 220,
       height: container.clientHeight || 360,
     });
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const v = viewer as any;
-    if (v.controls) {
-      v.controls.enableRotate = true;
-      v.controls.enableZoom = true;
+    if (viewer.controls) {
+      viewer.controls.enableRotate = true;
+      viewer.controls.enableZoom = true;
     }
-    v.autoRotate = rotating;
-    v.autoRotateSpeed = 0.8;
+    viewer.autoRotate = rotating;
+    viewer.autoRotateSpeed = 0.8;
 
     viewerRef.current = viewer;
-    return viewer;
   }, [rotating]);
 
-  // Initialise on mount
   useEffect(() => {
     initViewer();
     return () => {
@@ -60,34 +54,28 @@ export function SkinPreview3D({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Update auto-rotate
   useEffect(() => {
     if (viewerRef.current) {
       viewerRef.current.autoRotate = rotating;
     }
   }, [rotating]);
 
-  // Update animation
   useEffect(() => {
     if (!viewerRef.current) return;
     const sv3d = viewerRef.current;
-
     sv3d.animation = null;
 
-    if (animation === "walk") {
-      import("skinview3d").then(({ WalkingAnimation }) => {
-        sv3d.animation = new WalkingAnimation();
+    import("skinview3d").then((mod: any) => {
+      if (animation === "walk") {
+        sv3d.animation = new mod.WalkingAnimation();
         sv3d.animation.speed = 0.8;
-      });
-    } else if (animation === "run") {
-      import("skinview3d").then(({ RunningAnimation }) => {
-        sv3d.animation = new RunningAnimation();
+      } else if (animation === "run") {
+        sv3d.animation = new mod.RunningAnimation();
         sv3d.animation.speed = 1.2;
-      });
-    }
+      }
+    });
   }, [animation]);
 
-  // Update skin texture whenever imageData changes
   useEffect(() => {
     if (!viewerRef.current || !imageData) return;
 
