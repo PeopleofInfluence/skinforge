@@ -1,7 +1,7 @@
 "use client";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef, useCallback, useState } from "react";
 import type { BodyType, AnimationType } from "@/types";
 
 interface SkinPreview3DProps {
@@ -19,6 +19,29 @@ export function SkinPreview3D({
 }: SkinPreview3DProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<any>(null);
+  const [showOuter, setShowOuter] = useState(false);
+  const showOuterRef = useRef(false);
+
+  // Hide/show all outer layer meshes
+  const applyOuterLayerVisibility = useCallback((visible: boolean) => {
+    const viewer = viewerRef.current;
+    if (!viewer) return;
+    const parts = ["head", "body", "rightArm", "leftArm", "rightLeg", "leftLeg"];
+    parts.forEach((part) => {
+      const outer = viewer.playerObject?.skin?.[part]?.outerLayer;
+      if (outer) outer.visible = visible;
+    });
+    viewer.scene?.traverse((obj: any) => {
+      if (obj.isMesh && obj.name?.toLowerCase().includes("outer")) {
+        obj.visible = visible;
+      }
+    });
+  }, []);
+
+  useEffect(() => {
+    showOuterRef.current = showOuter;
+    applyOuterLayerVisibility(showOuter);
+  }, [showOuter, applyOuterLayerVisibility]);
 
   const initViewer = useCallback(async () => {
     if (!containerRef.current) return;
@@ -87,23 +110,47 @@ export function SkinPreview3D({
     ctx.putImageData(imageData, 0, 0);
     const dataUrl = canvas.toDataURL("image/png");
 
-    viewerRef.current.loadSkin(dataUrl, {
+    const result = viewerRef.current.loadSkin(dataUrl, {
       model: bodyType === "slim" ? "slim" : "default",
     });
-  }, [imageData, bodyType]);
+
+    // Re-apply outer layer visibility after skin reloads (loadSkin resets it)
+    const apply = () => applyOuterLayerVisibility(showOuterRef.current);
+    if (result && typeof result.then === "function") {
+      result.then(apply);
+    } else {
+      setTimeout(apply, 150);
+    }
+  }, [imageData, bodyType, applyOuterLayerVisibility]);
 
   return (
-    <div
-      ref={containerRef}
-      className="relative w-full h-full flex items-center justify-center"
-    >
-      <canvas className="rounded-lg" />
-      {!imageData && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center text-forge-text-muted text-sm gap-2 pointer-events-none">
-          <SkinIcon />
-          <span>No skin loaded</span>
-        </div>
-      )}
+    <div className="relative w-full h-full flex flex-col">
+      <div
+        ref={containerRef}
+        className="relative flex-1 flex items-center justify-center"
+      >
+        <canvas className="rounded-lg" />
+        {!imageData && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center text-forge-text-muted text-sm gap-2 pointer-events-none">
+            <SkinIcon />
+            <span>No skin loaded</span>
+          </div>
+        )}
+      </div>
+      {/* Outer layer toggle */}
+      <div className="flex justify-center pb-1 shrink-0">
+        <button
+          onClick={() => setShowOuter((v) => !v)}
+          className={`text-xs px-3 py-1 rounded-full border transition-colors ${
+            showOuter
+              ? "border-forge-accent text-forge-accent bg-forge-accent/10"
+              : "border-forge-border text-forge-text-muted hover:text-forge-text"
+          }`}
+          title="Toggle jacket / overlay layer"
+        >
+          {showOuter ? "Outer: On" : "Outer: Off"}
+        </button>
+      </div>
     </div>
   );
 }
