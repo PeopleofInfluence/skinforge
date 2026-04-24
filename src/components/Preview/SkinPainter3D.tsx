@@ -71,8 +71,16 @@ export function SkinPainter3D({
     const c = document.createElement("canvas");
     c.width = 64; c.height = 64;
     c.getContext("2d")!.putImageData(data, 0, 0);
+
+    const isSlim = bt === "slim";
+
+    // Set slim directly on the player object — most reliable way
+    if (viewerRef.current.playerObject) {
+      viewerRef.current.playerObject.slim = isSlim;
+    }
+
     const result = viewerRef.current.loadSkin(c.toDataURL("image/png"), {
-      model: bt === "slim" ? "slim" : "default",
+      model: isSlim ? "slim" : "default",
     });
     // Re-apply outer layer visibility after skin loads (loadSkin resets it)
     const apply = () => applyOuterLayerVisibility(showOuterLayerRef.current);

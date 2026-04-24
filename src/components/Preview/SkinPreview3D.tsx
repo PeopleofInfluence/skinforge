@@ -22,6 +22,13 @@ export function SkinPreview3D({
   const [showOuter, setShowOuter] = useState(false);
   const showOuterRef = useRef(false);
 
+  // Keep refs so async callbacks always read the latest values
+  const imageDataRef = useRef<ImageData | null>(imageData);
+  const bodyTypeRef = useRef<BodyType>(bodyType);
+
+  useEffect(() => { imageDataRef.current = imageData; }, [imageData]);
+  useEffect(() => { bodyTypeRef.current = bodyType; }, [bodyType]);
+
   // Hide/show all outer layer meshes
   const applyOuterLayerVisibility = useCallback((visible: boolean) => {
     const viewer = viewerRef.current;
@@ -43,39 +50,76 @@ export function SkinPreview3D({
     applyOuterLayerVisibility(showOuter);
   }, [showOuter, applyOuterLayerVisibility]);
 
-  const initViewer = useCallback(async () => {
-    if (!containerRef.current) return;
+  // Central function to load skin + apply model type + outer visibility
+  const loadSkinToViewer = useCallback((data: ImageData, bt: BodyType) => {
+    const viewer = viewerRef.current;
+    if (!viewer) return;
 
-    const skinview3d: any = await import("skinview3d");
+    const canvas = document.createElement("canvas");
+    canvas.width = 64; canvas.height = 64;
+    canvas.getContext("2d")!.putImageData(data, 0, 0);
+    const dataUrl = canvas.toDataURL("image/png");
 
-    if (viewerRef.current) {
-      viewerRef.current.dispose();
+    const isSlim = bt === "slim";
+
+    // Set slim directly on the player object — most reliable way
+    if (viewer.playerObject) {
+      viewer.playerObject.slim = isSlim;
     }
 
-    const container = containerRef.current;
-    const viewer = new skinview3d.SkinViewer({
-      canvas: container.querySelector("canvas"),
-      width: container.clientWidth || 220,
-      height: container.clientHeight || 360,
+    const result = viewer.loadSkin(dataUrl, {
+      model: isSlim ? "slim" : "default",
     });
 
-    if (viewer.controls) {
-      viewer.controls.enableRotate = true;
-      viewer.controls.enableZoom = true;
+    // Re-apply outer layer visibility after loadSkin resets it
+    const apply = () => applyOuterLayerVisibility(showOuterRef.current);
+    if (result && typeof result.then === "function") {
+      result.then(apply);
+    } else {
+      setTimeout(apply, 150);
     }
-    viewer.autoRotate = rotating;
-    viewer.autoRotateSpeed = 0.8;
+  }, [applyOuterLayerVisibility]);
 
-    viewerRef.current = viewer;
-  }, [rotating]);
-
+  // Build the viewer once on mount, then load skin if already available
   useEffect(() => {
-    initViewer();
-    return () => {
-      viewerRef.current?.dispose();
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (!containerRef.current) return;
+
+    (async () => {
+      const skinview3d: any = await import("skinview3d");
+      if (!containerRef.current) return;
+
+      if (viewerRef.current) viewerRef.current.dispose();
+
+      const container = containerRef.current;
+      const viewer = new skinview3d.SkinViewer({
+        canvas: container.querySelector("canvas"),
+        width: container.clientWidth || 220,
+        height: container.clientHeight || 360,
+      });
+
+      if (viewer.controls) {
+        viewer.controls.enableRotate = true;
+        viewer.controls.enableZoom = true;
+      }
+      viewer.autoRotate = true;
+      viewer.autoRotateSpeed = 0.8;
+      viewerRef.current = viewer;
+
+      // Load skin if it was already set before viewer finished initialising
+      if (imageDataRef.current) {
+        loadSkinToViewer(imageDataRef.current, bodyTypeRef.current);
+      }
+    })();
+
+    return () => { viewerRef.current?.dispose(); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Reload whenever skin data OR body type changes
+  useEffect(() => {
+    if (!imageData) return;
+    loadSkinToViewer(imageData, bodyType);
+  }, [imageData, bodyType, loadSkinToViewer]);
 
   useEffect(() => {
     if (viewerRef.current) {
@@ -87,7 +131,6 @@ export function SkinPreview3D({
     if (!viewerRef.current) return;
     const sv3d = viewerRef.current;
     sv3d.animation = null;
-
     import("skinview3d").then((mod: any) => {
       if (animation === "walk") {
         sv3d.animation = new mod.WalkingAnimation();
@@ -98,30 +141,6 @@ export function SkinPreview3D({
       }
     });
   }, [animation]);
-
-  useEffect(() => {
-    if (!viewerRef.current || !imageData) return;
-
-    const canvas = document.createElement("canvas");
-    canvas.width = 64;
-    canvas.height = 64;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    ctx.putImageData(imageData, 0, 0);
-    const dataUrl = canvas.toDataURL("image/png");
-
-    const result = viewerRef.current.loadSkin(dataUrl, {
-      model: bodyType === "slim" ? "slim" : "default",
-    });
-
-    // Re-apply outer layer visibility after skin reloads (loadSkin resets it)
-    const apply = () => applyOuterLayerVisibility(showOuterRef.current);
-    if (result && typeof result.then === "function") {
-      result.then(apply);
-    } else {
-      setTimeout(apply, 150);
-    }
-  }, [imageData, bodyType, applyOuterLayerVisibility]);
 
   return (
     <div className="relative w-full h-full flex flex-col">
