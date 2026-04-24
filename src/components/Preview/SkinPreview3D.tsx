@@ -167,7 +167,7 @@ export function SkinPreview3D({
           }`}
           title="Toggle jacket / overlay layer"
         >
-          {showOuter ? "Outer: On" : "Outer: Off"}
+          {showOuter ? "Hide Outer Layer" : "Show Outer Layer"}
         </button>
       </div>
     </div>

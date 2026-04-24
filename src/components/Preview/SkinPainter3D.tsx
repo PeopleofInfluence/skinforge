@@ -288,7 +288,7 @@ export function SkinPainter3D({
             showOuterLayer ? "bg-forge-border/60 text-forge-text" : "text-forge-text-muted bg-forge-border/20"
           }`}
         >
-          <LayersIcon /> {showOuterLayer ? "Outer: On" : "Outer: Off"}
+          <LayersIcon /> {showOuterLayer ? "Hide Outer Layer" : "Show Outer Layer"}
         </button>
 
         {mode === "paint" && (
