@@ -115,64 +115,121 @@ export function createBlankSkin(): ImageData {
   return new ImageData(SKIN_WIDTH, SKIN_HEIGHT);
 }
 
+type Rect = { x: number; y: number; w: number; h: number };
+type PartDef = { front: Rect; sides: Rect[] };
+
+/** UV regions for each inner-layer body part (64×64 modern skin) */
+function getSkinPartDefs(): PartDef[] {
+  return [
+    // Head
+    { front: { x: 8, y: 8, w: 8, h: 8 }, sides: [
+      { x: 0,  y: 8, w: 8, h: 8 }, // right
+      { x: 16, y: 8, w: 8, h: 8 }, // left
+      { x: 24, y: 8, w: 8, h: 8 }, // back
+      { x: 8,  y: 0, w: 8, h: 8 }, // top
+      { x: 16, y: 0, w: 8, h: 8 }, // bottom
+    ]},
+    // Body
+    { front: { x: 20, y: 20, w: 8, h: 12 }, sides: [
+      { x: 16, y: 20, w: 4, h: 12 },
+      { x: 28, y: 20, w: 4, h: 12 },
+      { x: 32, y: 20, w: 8, h: 12 },
+      { x: 20, y: 16, w: 8, h:  4 },
+      { x: 28, y: 16, w: 8, h:  4 },
+    ]},
+    // Right arm
+    { front: { x: 44, y: 20, w: 4, h: 12 }, sides: [
+      { x: 40, y: 20, w: 4, h: 12 },
+      { x: 48, y: 20, w: 4, h: 12 },
+      { x: 52, y: 20, w: 4, h: 12 },
+      { x: 44, y: 16, w: 4, h:  4 },
+      { x: 48, y: 16, w: 4, h:  4 },
+    ]},
+    // Left arm
+    { front: { x: 36, y: 52, w: 4, h: 12 }, sides: [
+      { x: 32, y: 52, w: 4, h: 12 },
+      { x: 40, y: 52, w: 4, h: 12 },
+      { x: 44, y: 52, w: 4, h: 12 },
+      { x: 36, y: 48, w: 4, h:  4 },
+      { x: 40, y: 48, w: 4, h:  4 },
+    ]},
+    // Right leg
+    { front: { x: 4, y: 20, w: 4, h: 12 }, sides: [
+      { x:  0, y: 20, w: 4, h: 12 },
+      { x:  8, y: 20, w: 4, h: 12 },
+      { x: 12, y: 20, w: 4, h: 12 },
+      { x:  4, y: 16, w: 4, h:  4 },
+      { x:  8, y: 16, w: 4, h:  4 },
+    ]},
+    // Left leg
+    { front: { x: 20, y: 52, w: 4, h: 12 }, sides: [
+      { x: 16, y: 52, w: 4, h: 12 },
+      { x: 24, y: 52, w: 4, h: 12 },
+      { x: 28, y: 52, w: 4, h: 12 },
+      { x: 20, y: 48, w: 4, h:  4 },
+      { x: 24, y: 48, w: 4, h:  4 },
+    ]},
+  ];
+}
+
 /**
- * Post-processes an AI-generated skin by spreading colors from painted pixels
- * into adjacent near-black (unfilled) pixels. Runs multiple passes so it fills
- * the narrow side/back face strips that the AI typically leaves black.
+ * Fills black/unfilled side, back, top and bottom faces of each body part
+ * using the average colour of that part's front face.
  *
- * Only touches pixels that are near-pure-black with full opacity (the AI's
- * "I didn't paint here" default). Transparent pixels are left alone.
+ * UV-layout aware — only fills within each face's own region so colours
+ * cannot bleed across UV boundaries into adjacent body parts.
  */
 export function fixAISkinBlackSides(imageData: ImageData): ImageData {
-  const w = imageData.width;
-  const h = imageData.height;
-  let data = new Uint8ClampedArray(imageData.data);
+  const copy = new ImageData(
+    new Uint8ClampedArray(imageData.data),
+    imageData.width,
+    imageData.height
+  );
+  const d = copy.data;
+  const W = copy.width;
 
-  const isUnfilled = (d: Uint8ClampedArray, idx: number) =>
-    d[idx] < 25 && d[idx + 1] < 25 && d[idx + 2] < 25 && d[idx + 3] > 200;
+  const isBlack = (i: number) => d[i] < 30 && d[i+1] < 30 && d[i+2] < 30 && d[i+3] > 180;
 
-  // Up to 30 passes — enough to fill a ~15px wide solid-black strip from both sides
-  for (let pass = 0; pass < 30; pass++) {
-    const next = new Uint8ClampedArray(data);
-    let changed = false;
+  /** Average colour of non-black opaque pixels in a rect */
+  const avgColor = (r: Rect): [number,number,number] | null => {
+    let rs = 0, gs = 0, bs = 0, n = 0;
+    for (let y = r.y; y < r.y + r.h; y++)
+      for (let x = r.x; x < r.x + r.w; x++) {
+        const i = (y * W + x) * 4;
+        if (!isBlack(i) && d[i+3] > 180) { rs += d[i]; gs += d[i+1]; bs += d[i+2]; n++; }
+      }
+    return n > 0 ? [Math.round(rs/n), Math.round(gs/n), Math.round(bs/n)] : null;
+  };
 
-    for (let y = 0; y < h; y++) {
-      for (let x = 0; x < w; x++) {
-        const idx = (y * w + x) * 4;
-        if (!isUnfilled(data, idx)) continue;
+  /** Fraction of opaque pixels in a rect that are near-black */
+  const blackFraction = (r: Rect): number => {
+    let black = 0, opaque = 0;
+    for (let y = r.y; y < r.y + r.h; y++)
+      for (let x = r.x; x < r.x + r.w; x++) {
+        const i = (y * W + x) * 4;
+        if (d[i+3] > 180) { opaque++; if (isBlack(i)) black++; }
+      }
+    return opaque > 0 ? black / opaque : 0;
+  };
 
-        // Average all 8 non-black opaque neighbours
-        let rSum = 0, gSum = 0, bSum = 0, count = 0;
-        for (let dy = -1; dy <= 1; dy++) {
-          for (let dx = -1; dx <= 1; dx++) {
-            if (dx === 0 && dy === 0) continue;
-            const nx = x + dx, ny = y + dy;
-            if (nx < 0 || nx >= w || ny < 0 || ny >= h) continue;
-            const nidx = (ny * w + nx) * 4;
-            if (!isUnfilled(data, nidx) && data[nidx + 3] > 200) {
-              rSum += data[nidx];
-              gSum += data[nidx + 1];
-              bSum += data[nidx + 2];
-              count++;
-            }
+  for (const part of getSkinPartDefs()) {
+    const color = avgColor(part.front);
+    if (!color) continue; // front itself is black — nothing useful to spread
+
+    for (const side of part.sides) {
+      if (blackFraction(side) < 0.5) continue; // mostly painted already
+
+      for (let y = side.y; y < side.y + side.h; y++)
+        for (let x = side.x; x < side.x + side.w; x++) {
+          const i = (y * W + x) * 4;
+          if (isBlack(i)) {
+            d[i] = color[0]; d[i+1] = color[1]; d[i+2] = color[2]; d[i+3] = 255;
           }
         }
-
-        if (count > 0) {
-          next[idx]     = Math.round(rSum / count);
-          next[idx + 1] = Math.round(gSum / count);
-          next[idx + 2] = Math.round(bSum / count);
-          next[idx + 3] = 255;
-          changed = true;
-        }
-      }
     }
-
-    data = next;
-    if (!changed) break; // nothing left to fill
   }
 
-  return new ImageData(data, w, h);
+  return copy;
 }
 
 /**
