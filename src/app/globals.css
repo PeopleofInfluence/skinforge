@@ -19,8 +19,6 @@ html,
 body {
   background-color: var(--forge-bg);
   color: var(--forge-text);
-  height: 100%;
-  overflow: hidden;
 }
 
 body {
