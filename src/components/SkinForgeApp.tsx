@@ -7,7 +7,7 @@ import { RightPanel } from "@/components/Layout/RightPanel";
 import { AuthModal } from "@/components/Auth/AuthModal";
 import { UserMenu } from "@/components/Auth/UserMenu";
 import { supabase } from "@/lib/supabase";
-import { createBlankSkin, canvasToPng } from "@/lib/minecraft-skin";
+import { createBlankSkin, canvasToPng, fixAISkinBlackSides } from "@/lib/minecraft-skin";
 import type { EditorState, Tool, LayerName, BodyType, Layer } from "@/types";
 import type { User } from "@supabase/supabase-js";
 
@@ -100,6 +100,12 @@ export default function SkinForgeApp() {
   const handlePixelsChange = useCallback((imageData: ImageData) => { setCurrentImageData(imageData); }, []);
   const handleSkinGenerated = useCallback((imageData: ImageData) => { setExternalImageData(imageData); setCurrentImageData(imageData); }, []);
   const handleClear = useCallback(() => { const blank = createBlankSkin(); setExternalImageData(blank); setCurrentImageData(blank); }, []);
+  const handleFixDarkSides = useCallback(() => {
+    if (!currentImageData) return;
+    const fixed = fixAISkinBlackSides(currentImageData);
+    setExternalImageData(fixed);
+    setCurrentImageData(fixed);
+  }, [currentImageData]);
 
   const handleExport = useCallback(() => {
     if (!currentImageData) return;
@@ -152,6 +158,7 @@ export default function SkinForgeApp() {
           canRedo={canRedo}
           onClear={handleClear}
           onExport={handleExport}
+          onFixDarkSides={handleFixDarkSides}
         />
         <CenterPanel
           editorState={editorState}

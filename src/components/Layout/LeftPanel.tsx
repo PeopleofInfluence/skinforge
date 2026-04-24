@@ -21,6 +21,7 @@ interface LeftPanelProps {
   canRedo: boolean;
   onClear: () => void;
   onExport: () => void;
+  onFixDarkSides: () => void;
 }
 
 type Tab = "tools" | "colour" | "layers";
@@ -40,6 +41,7 @@ export function LeftPanel({
   canRedo,
   onClear,
   onExport,
+  onFixDarkSides,
 }: LeftPanelProps) {
   const [tab, setTab] = useState<Tab>("tools");
 
@@ -85,6 +87,7 @@ export function LeftPanel({
             canRedo={canRedo}
             onClear={onClear}
             onExport={onExport}
+            onFixDarkSides={onFixDarkSides}
           />
         )}
         {tab === "colour" && (

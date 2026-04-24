@@ -116,6 +116,66 @@ export function createBlankSkin(): ImageData {
 }
 
 /**
+ * Post-processes an AI-generated skin by spreading colors from painted pixels
+ * into adjacent near-black (unfilled) pixels. Runs multiple passes so it fills
+ * the narrow side/back face strips that the AI typically leaves black.
+ *
+ * Only touches pixels that are near-pure-black with full opacity (the AI's
+ * "I didn't paint here" default). Transparent pixels are left alone.
+ */
+export function fixAISkinBlackSides(imageData: ImageData): ImageData {
+  const w = imageData.width;
+  const h = imageData.height;
+  let data = new Uint8ClampedArray(imageData.data);
+
+  const isUnfilled = (d: Uint8ClampedArray, idx: number) =>
+    d[idx] < 25 && d[idx + 1] < 25 && d[idx + 2] < 25 && d[idx + 3] > 200;
+
+  // Up to 30 passes — enough to fill a ~15px wide solid-black strip from both sides
+  for (let pass = 0; pass < 30; pass++) {
+    const next = new Uint8ClampedArray(data);
+    let changed = false;
+
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const idx = (y * w + x) * 4;
+        if (!isUnfilled(data, idx)) continue;
+
+        // Average all 8 non-black opaque neighbours
+        let rSum = 0, gSum = 0, bSum = 0, count = 0;
+        for (let dy = -1; dy <= 1; dy++) {
+          for (let dx = -1; dx <= 1; dx++) {
+            if (dx === 0 && dy === 0) continue;
+            const nx = x + dx, ny = y + dy;
+            if (nx < 0 || nx >= w || ny < 0 || ny >= h) continue;
+            const nidx = (ny * w + nx) * 4;
+            if (!isUnfilled(data, nidx) && data[nidx + 3] > 200) {
+              rSum += data[nidx];
+              gSum += data[nidx + 1];
+              bSum += data[nidx + 2];
+              count++;
+            }
+          }
+        }
+
+        if (count > 0) {
+          next[idx]     = Math.round(rSum / count);
+          next[idx + 1] = Math.round(gSum / count);
+          next[idx + 2] = Math.round(bSum / count);
+          next[idx + 3] = 255;
+          changed = true;
+        }
+      }
+    }
+
+    data = next;
+    if (!changed) break; // nothing left to fill
+  }
+
+  return new ImageData(data, w, h);
+}
+
+/**
  * Returns a copy of the ImageData with all outer layer (jacket/hat/sleeve)
  * pixel regions cleared to transparent. Used to hide the outer layer in the
  * 3D viewer without relying on skinview3d mesh visibility APIs.

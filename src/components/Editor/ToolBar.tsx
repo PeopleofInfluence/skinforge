@@ -16,6 +16,7 @@ interface ToolBarProps {
   canRedo: boolean;
   onClear: () => void;
   onExport: () => void;
+  onFixDarkSides: () => void;
 }
 
 const TOOLS: { id: Tool; label: string; icon: React.ReactNode }[] = [
@@ -41,6 +42,7 @@ export function ToolBar({
   canRedo,
   onClear,
   onExport,
+  onFixDarkSides,
 }: ToolBarProps) {
   return (
     <div className="flex flex-col gap-1">
@@ -121,6 +123,18 @@ export function ToolBar({
       >
         <GridIcon />
         <span>Grid</span>
+      </button>
+
+      <div className="border-t border-forge-border my-1" />
+
+      {/* Fix dark sides */}
+      <button
+        onClick={onFixDarkSides}
+        className="flex items-center gap-2 px-3 py-1.5 rounded text-xs text-yellow-400 hover:bg-yellow-900/20 transition-colors"
+        title="Spread colours into black side/back faces"
+      >
+        <WandIcon />
+        <span>Fix Dark Sides</span>
       </button>
 
       <div className="border-t border-forge-border my-1" />
@@ -208,6 +222,13 @@ function DownloadIcon() {
   return (
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
       <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" />
+    </svg>
+  );
+}
+function WandIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="m15 4-1 1" /><path d="m18 1-1 1" /><path d="M21 7h-1" /><path d="M15.5 2.5 3 15l6 6 12.5-12.5-6-6Z" /><path d="m6 15 3 3" />
     </svg>
   );
 }
