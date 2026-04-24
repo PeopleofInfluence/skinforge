@@ -26,6 +26,40 @@ export function SkinLibrary({
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
 
+  // Load by Minecraft username
+  const [mcUsername, setMcUsername] = useState("");
+  const [mcLoading, setMcLoading] = useState(false);
+  const [mcError, setMcError] = useState<string | null>(null);
+  const [mcSuccess, setMcSuccess] = useState(false);
+
+  const handleLoadByUsername = useCallback(async () => {
+    const name = mcUsername.trim();
+    if (!name) return;
+    setMcLoading(true);
+    setMcError(null);
+    setMcSuccess(false);
+    try {
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      await new Promise<void>((resolve, reject) => {
+        img.onload = () => resolve();
+        img.onerror = () => reject(new Error("Player not found"));
+        img.src = `https://mc-heads.net/skin/${encodeURIComponent(name)}`;
+      });
+      const canvas = document.createElement("canvas");
+      canvas.width = 64; canvas.height = 64;
+      canvas.getContext("2d")!.drawImage(img, 0, 0, 64, 64);
+      const data = canvas.getContext("2d")!.getImageData(0, 0, 64, 64);
+      onLoadSkin(data);
+      setMcSuccess(true);
+      setMcUsername("");
+      setTimeout(() => setMcSuccess(false), 2000);
+    } catch {
+      setMcError("Player not found or skin unavailable.");
+    }
+    setMcLoading(false);
+  }, [mcUsername, onLoadSkin]);
+
   const handleSave = useCallback(async () => {
     if (!currentImageData || !saveName.trim() || !userId) return;
     setSaving(true);
@@ -66,6 +100,32 @@ export function SkinLibrary({
 
   return (
     <div className="flex flex-col gap-3 h-full">
+      {/* Load by Minecraft username */}
+      <div className="flex flex-col gap-2 p-3 bg-forge-bg/50 rounded-lg border border-forge-border">
+        <label className="text-xs text-forge-text-muted uppercase tracking-wide">
+          Load by Minecraft username
+        </label>
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={mcUsername}
+            onChange={(e) => setMcUsername(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleLoadByUsername()}
+            placeholder="e.g. Notch, Dream…"
+            className="forge-input text-sm flex-1"
+          />
+          <button
+            onClick={handleLoadByUsername}
+            disabled={mcLoading || !mcUsername.trim()}
+            className="btn-primary flex items-center gap-1 px-3 text-xs shrink-0 disabled:opacity-50"
+          >
+            {mcLoading ? <Spinner /> : mcSuccess ? <CheckIcon /> : <LoadIcon />}
+            {mcSuccess ? "Loaded!" : "Load"}
+          </button>
+        </div>
+        {mcError && <p className="text-xs text-red-400">{mcError}</p>}
+      </div>
+
       {/* Save form */}
       {userId && currentImageData && (
         <div className="flex flex-col gap-2 p-3 bg-forge-bg/50 rounded-lg border border-forge-border">
@@ -166,6 +226,13 @@ function LibraryIcon() {
   return (
     <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" className="opacity-30">
       <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" /><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
+    </svg>
+  );
+}
+function LoadIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" />
     </svg>
   );
 }

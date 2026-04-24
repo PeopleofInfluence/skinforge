@@ -24,26 +24,42 @@ interface UsePixelEditorOptions {
   onPixelsChange?: (imageData: ImageData) => void;
 }
 
+function cloneImageData(data: ImageData): ImageData {
+  return new ImageData(new Uint8ClampedArray(data.data), data.width, data.height);
+}
+
 export function usePixelEditor({
   canvasRef,
   editorState,
   onColorPick,
   onPixelsChange,
 }: UsePixelEditorOptions) {
-  const [imageData, setImageData] = useState<ImageData>(createBlankSkin());
+  const [imageData, setImageDataState] = useState<ImageData>(createBlankSkin());
+  const [canUndo, setCanUndo] = useState(false);
+  const [canRedo, setCanRedo] = useState(false);
+
   const isDrawing = useRef(false);
   const lastPos = useRef<{ x: number; y: number } | null>(null);
   const historyRef = useRef<ImageData[]>([]);
   const futureRef = useRef<ImageData[]>([]);
 
+  // Keep a ref to current imageData to avoid stale closures
+  const imageDataRef = useRef<ImageData>(imageData);
+  useEffect(() => { imageDataRef.current = imageData; }, [imageData]);
+
+  const setImageData = useCallback((data: ImageData) => {
+    imageDataRef.current = data;
+    setImageDataState(data);
+  }, []);
+
   // Commit current state to undo history
   const commitHistory = useCallback(() => {
-    historyRef.current.push(
-      new ImageData(new Uint8ClampedArray(imageData.data), SKIN_WIDTH, SKIN_HEIGHT)
-    );
+    historyRef.current.push(cloneImageData(imageDataRef.current));
     if (historyRef.current.length > 50) historyRef.current.shift();
     futureRef.current = [];
-  }, [imageData]);
+    setCanUndo(true);
+    setCanRedo(false);
+  }, []);
 
   // Draw imageData to canvas
   const render = useCallback(
@@ -56,34 +72,24 @@ export function usePixelEditor({
       ctx.clearRect(0, 0, SKIN_WIDTH, SKIN_HEIGHT);
       ctx.putImageData(data, 0, 0);
 
-      // Draw grid if enabled
       if (editorState.showGrid && editorState.zoom >= 4) {
         ctx.strokeStyle = "rgba(255,255,255,0.08)";
         ctx.lineWidth = 0.5 / editorState.zoom;
         for (let x = 0; x <= SKIN_WIDTH; x++) {
-          ctx.beginPath();
-          ctx.moveTo(x, 0);
-          ctx.lineTo(x, SKIN_HEIGHT);
-          ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, SKIN_HEIGHT); ctx.stroke();
         }
         for (let y = 0; y <= SKIN_HEIGHT; y++) {
-          ctx.beginPath();
-          ctx.moveTo(0, y);
-          ctx.lineTo(0 + SKIN_WIDTH, y);
-          ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(SKIN_WIDTH, y); ctx.stroke();
         }
       }
     },
     [canvasRef, editorState.showGrid, editorState.zoom]
   );
 
-  useEffect(() => {
-    render(imageData);
-  }, [imageData, render]);
+  useEffect(() => { render(imageData); }, [imageData, render]);
 
-  // Convert mouse/touch event to skin pixel coordinates
   const getPixelCoords = useCallback(
-    (e: React.MouseEvent<HTMLCanvasElement> | MouseEvent): { x: number; y: number } | null => {
+    (e: React.MouseEvent<HTMLCanvasElement> | MouseEvent) => {
       const canvas = canvasRef.current;
       if (!canvas) return null;
       const rect = canvas.getBoundingClientRect();
@@ -97,30 +103,31 @@ export function usePixelEditor({
     [canvasRef]
   );
 
-  // Paint a single pixel
   const paintPixel = useCallback(
     (data: ImageData, x: number, y: number, tool: Tool, color: string): ImageData => {
-      const newData = new ImageData(
-        new Uint8ClampedArray(data.data),
-        data.width,
-        data.height
-      );
+      const newData = cloneImageData(data);
+      const idx = (y * SKIN_WIDTH + x) * 4;
 
       if (tool === "eraser") {
-        const idx = (y * SKIN_WIDTH + x) * 4;
-        newData.data[idx] = 0;
-        newData.data[idx + 1] = 0;
-        newData.data[idx + 2] = 0;
-        newData.data[idx + 3] = 0;
+        newData.data[idx] = 0; newData.data[idx + 1] = 0;
+        newData.data[idx + 2] = 0; newData.data[idx + 3] = 0;
       } else if (tool === "pencil") {
         const [r, g, b, a] = hexToRgba(color);
-        const idx = (y * SKIN_WIDTH + x) * 4;
-        newData.data[idx] = r;
-        newData.data[idx + 1] = g;
-        newData.data[idx + 2] = b;
-        newData.data[idx + 3] = a;
+        newData.data[idx] = r; newData.data[idx + 1] = g;
+        newData.data[idx + 2] = b; newData.data[idx + 3] = a;
+      } else if (tool === "brighten") {
+        if (newData.data[idx + 3] > 0) {
+          newData.data[idx]     = Math.min(255, Math.round(newData.data[idx] * 1.25));
+          newData.data[idx + 1] = Math.min(255, Math.round(newData.data[idx + 1] * 1.25));
+          newData.data[idx + 2] = Math.min(255, Math.round(newData.data[idx + 2] * 1.25));
+        }
+      } else if (tool === "darken") {
+        if (newData.data[idx + 3] > 0) {
+          newData.data[idx]     = Math.round(newData.data[idx] * 0.75);
+          newData.data[idx + 1] = Math.round(newData.data[idx + 1] * 0.75);
+          newData.data[idx + 2] = Math.round(newData.data[idx + 2] * 0.75);
+        }
       }
-
       return newData;
     },
     []
@@ -130,22 +137,19 @@ export function usePixelEditor({
     (e: React.MouseEvent<HTMLCanvasElement>) => {
       const pos = getPixelCoords(e);
       if (!pos) return;
-
       const { tool, color } = editorState;
 
       if (tool === "eyedropper") {
+        const current = imageDataRef.current;
         const idx = (pos.y * SKIN_WIDTH + pos.x) * 4;
-        const r = imageData.data[idx];
-        const g = imageData.data[idx + 1];
-        const b = imageData.data[idx + 2];
-        onColorPick?.(rgbaToHex(r, g, b));
+        onColorPick?.(rgbaToHex(current.data[idx], current.data[idx + 1], current.data[idx + 2]));
         return;
       }
 
       if (tool === "fill") {
         commitHistory();
         const [r, g, b, a] = hexToRgba(color);
-        const filled = floodFill(imageData, pos.x, pos.y, [r, g, b, a]);
+        const filled = floodFill(imageDataRef.current, pos.x, pos.y, [r, g, b, a]);
         setImageData(filled);
         onPixelsChange?.(filled);
         return;
@@ -154,20 +158,11 @@ export function usePixelEditor({
       commitHistory();
       isDrawing.current = true;
       lastPos.current = pos;
-
-      const updated = paintPixel(imageData, pos.x, pos.y, tool, color);
+      const updated = paintPixel(imageDataRef.current, pos.x, pos.y, tool, color);
       setImageData(updated);
       onPixelsChange?.(updated);
     },
-    [
-      commitHistory,
-      editorState,
-      getPixelCoords,
-      imageData,
-      onColorPick,
-      onPixelsChange,
-      paintPixel,
-    ]
+    [commitHistory, editorState, getPixelCoords, onColorPick, onPixelsChange, paintPixel, setImageData]
   );
 
   const handlePointerMove = useCallback(
@@ -175,16 +170,15 @@ export function usePixelEditor({
       if (!isDrawing.current) return;
       const pos = getPixelCoords(e);
       if (!pos) return;
-
       const { tool, color } = editorState;
-      if (tool === "pencil" || tool === "eraser") {
-        // Interpolate between lastPos and pos for smooth lines
+
+      if (tool === "pencil" || tool === "eraser" || tool === "brighten" || tool === "darken") {
         const last = lastPos.current ?? pos;
         const dx = pos.x - last.x;
         const dy = pos.y - last.y;
         const steps = Math.max(Math.abs(dx), Math.abs(dy), 1);
 
-        let current = imageData;
+        let current = imageDataRef.current;
         for (let i = 0; i <= steps; i++) {
           const ix = Math.round(last.x + (dx * i) / steps);
           const iy = Math.round(last.y + (dy * i) / steps);
@@ -195,7 +189,7 @@ export function usePixelEditor({
         onPixelsChange?.(current);
       }
     },
-    [editorState, getPixelCoords, imageData, onPixelsChange, paintPixel]
+    [editorState, getPixelCoords, onPixelsChange, paintPixel, setImageData]
   );
 
   const handlePointerUp = useCallback(() => {
@@ -206,33 +200,35 @@ export function usePixelEditor({
   const undo = useCallback(() => {
     const prev = historyRef.current.pop();
     if (prev) {
-      futureRef.current.push(
-        new ImageData(new Uint8ClampedArray(imageData.data), SKIN_WIDTH, SKIN_HEIGHT)
-      );
+      futureRef.current.push(cloneImageData(imageDataRef.current));
       setImageData(prev);
       onPixelsChange?.(prev);
+      setCanUndo(historyRef.current.length > 0);
+      setCanRedo(true);
     }
-  }, [imageData, onPixelsChange]);
+  }, [onPixelsChange, setImageData]);
 
   const redo = useCallback(() => {
     const next = futureRef.current.pop();
     if (next) {
-      historyRef.current.push(
-        new ImageData(new Uint8ClampedArray(imageData.data), SKIN_WIDTH, SKIN_HEIGHT)
-      );
+      historyRef.current.push(cloneImageData(imageDataRef.current));
       setImageData(next);
       onPixelsChange?.(next);
+      setCanUndo(true);
+      setCanRedo(futureRef.current.length > 0);
     }
-  }, [imageData, onPixelsChange]);
+  }, [onPixelsChange, setImageData]);
 
   const loadImageData = useCallback(
     (data: ImageData) => {
       historyRef.current = [];
       futureRef.current = [];
-      setImageData(new ImageData(new Uint8ClampedArray(data.data), data.width, data.height));
+      setCanUndo(false);
+      setCanRedo(false);
+      setImageData(cloneImageData(data));
       onPixelsChange?.(data);
     },
-    [onPixelsChange]
+    [onPixelsChange, setImageData]
   );
 
   return {
@@ -243,7 +239,7 @@ export function usePixelEditor({
     handlePointerUp,
     undo,
     redo,
-    canUndo: historyRef.current.length > 0,
-    canRedo: futureRef.current.length > 0,
+    canUndo,
+    canRedo,
   };
 }

@@ -55,6 +55,35 @@ export default function SkinForgeApp() {
     return () => sub.subscription.unsubscribe();
   }, []);
 
+  // Load autosave on mount
+  useEffect(() => {
+    const saved = localStorage.getItem("skinforge-autosave");
+    if (!saved) return;
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = 64; canvas.height = 64;
+      const ctx = canvas.getContext("2d")!;
+      ctx.drawImage(img, 0, 0);
+      const data = ctx.getImageData(0, 0, 64, 64);
+      setExternalImageData(data);
+      setCurrentImageData(data);
+    };
+    img.src = saved;
+  }, []);
+
+  // Autosave to localStorage whenever pixels change (debounced via useEffect)
+  useEffect(() => {
+    if (!currentImageData) return;
+    const id = setTimeout(() => {
+      const canvas = document.createElement("canvas");
+      canvas.width = 64; canvas.height = 64;
+      canvas.getContext("2d")!.putImageData(currentImageData, 0, 0);
+      localStorage.setItem("skinforge-autosave", canvas.toDataURL("image/png"));
+    }, 500);
+    return () => clearTimeout(id);
+  }, [currentImageData]);
+
   const setTool = useCallback((tool: Tool) => setEditorState((s) => ({ ...s, tool })), []);
   const setColor = useCallback((color: string) => setEditorState((s) => ({ ...s, color })), []);
   const setLayer = useCallback((activeLayer: LayerName) => setEditorState((s) => ({ ...s, activeLayer })), []);
@@ -66,8 +95,9 @@ export default function SkinForgeApp() {
   const toggleGrid = useCallback(() => setEditorState((s) => ({ ...s, showGrid: !s.showGrid })), []);
   const setBodyType = useCallback((bodyType: BodyType) => setEditorState((s) => ({ ...s, bodyType })), []);
 
+  const handleUndoStateChange = useCallback((u: boolean, r: boolean) => { setCanUndo(u); setCanRedo(r); }, []);
   const handleColorPick = useCallback((color: string) => { setColor(color); setTool("pencil"); }, [setColor, setTool]);
-  const handlePixelsChange = useCallback((imageData: ImageData) => { setCurrentImageData(imageData); setCanUndo(true); }, []);
+  const handlePixelsChange = useCallback((imageData: ImageData) => { setCurrentImageData(imageData); }, []);
   const handleSkinGenerated = useCallback((imageData: ImageData) => { setExternalImageData(imageData); setCurrentImageData(imageData); }, []);
   const handleClear = useCallback(() => { const blank = createBlankSkin(); setExternalImageData(blank); setCurrentImageData(blank); }, []);
 
@@ -130,6 +160,7 @@ export default function SkinForgeApp() {
           externalImageData={externalImageData}
           onUndoRef={(fn) => { undoFnRef.current = fn; }}
           onRedoRef={(fn) => { redoFnRef.current = fn; }}
+          onUndoStateChange={handleUndoStateChange}
           previewImageData={currentImageData}
           bodyType={editorState.bodyType}
         />

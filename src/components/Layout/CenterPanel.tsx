@@ -13,6 +13,7 @@ interface CenterPanelProps {
   externalImageData?: ImageData | null;
   onUndoRef?: (fn: () => void) => void;
   onRedoRef?: (fn: () => void) => void;
+  onUndoStateChange?: (canUndo: boolean, canRedo: boolean) => void;
   previewImageData: ImageData | null;
   bodyType: BodyType;
 }
@@ -26,6 +27,7 @@ export function CenterPanel({
   externalImageData,
   onUndoRef,
   onRedoRef,
+  onUndoStateChange,
   previewImageData,
   bodyType,
 }: CenterPanelProps) {
@@ -131,6 +133,7 @@ export function CenterPanel({
               externalImageData={externalImageData}
               onUndoRef={onUndoRef}
               onRedoRef={onRedoRef}
+              onUndoStateChange={onUndoStateChange}
             />
           </div>
         )}

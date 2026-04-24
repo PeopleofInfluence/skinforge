@@ -21,7 +21,7 @@ export interface Layer {
   locked: boolean;
 }
 
-export type Tool = "pencil" | "eraser" | "fill" | "eyedropper" | "select";
+export type Tool = "pencil" | "eraser" | "fill" | "eyedropper" | "brighten" | "darken" | "select";
 
 export interface SkinData {
   id: string;

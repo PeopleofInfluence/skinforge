@@ -12,6 +12,7 @@ interface PixelEditorProps {
   externalImageData?: ImageData | null;
   onUndoRef?: (fn: () => void) => void;
   onRedoRef?: (fn: () => void) => void;
+  onUndoStateChange?: (canUndo: boolean, canRedo: boolean) => void;
 }
 
 export function PixelEditor({
@@ -21,6 +22,7 @@ export function PixelEditor({
   externalImageData,
   onUndoRef,
   onRedoRef,
+  onUndoStateChange,
 }: PixelEditorProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -33,6 +35,8 @@ export function PixelEditor({
     handlePointerUp,
     undo,
     redo,
+    canUndo,
+    canRedo,
   } = usePixelEditor({
     canvasRef,
     editorState,
@@ -45,6 +49,11 @@ export function PixelEditor({
     onUndoRef?.(undo);
     onRedoRef?.(redo);
   }, [undo, redo, onUndoRef, onRedoRef]);
+
+  // Notify parent when undo/redo availability changes
+  useEffect(() => {
+    onUndoStateChange?.(canUndo, canRedo);
+  }, [canUndo, canRedo, onUndoStateChange]);
 
   // Load external image data when it changes (from AI gen / upload)
   useEffect(() => {
