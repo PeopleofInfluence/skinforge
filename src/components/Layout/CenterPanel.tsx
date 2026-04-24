@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { PixelEditor } from "@/components/Editor/PixelEditor";
 import { SkinPreview3D } from "@/components/Preview/SkinPreview3D";
+import { SkinPainter3D } from "@/components/Preview/SkinPainter3D";
 import type { EditorState, BodyType, AnimationType } from "@/types";
 
 interface CenterPanelProps {
@@ -16,7 +17,7 @@ interface CenterPanelProps {
   bodyType: BodyType;
 }
 
-type ViewMode = "editor" | "preview" | "split";
+type ViewMode = "editor" | "preview" | "split" | "paint3d";
 
 export function CenterPanel({
   editorState,
@@ -32,10 +33,13 @@ export function CenterPanel({
   const [animation, setAnimation] = useState<AnimationType>("idle");
   const [rotating, setRotating] = useState(true);
 
+  const [brushSize, setBrushSize] = useState(1);
+
   const modes: { id: ViewMode; label: string }[] = [
-    { id: "editor", label: "Edit" },
+    { id: "editor", label: "2D Edit" },
     { id: "split", label: "Split" },
-    { id: "preview", label: "3D" },
+    { id: "preview", label: "3D View" },
+    { id: "paint3d", label: "🖌️ 3D Paint" },
   ];
 
   return (
@@ -59,10 +63,9 @@ export function CenterPanel({
           ))}
         </div>
 
-        {/* Preview controls (shown when preview is visible) */}
-        {viewMode !== "editor" && (
+        {/* Preview controls */}
+        {(viewMode === "preview" || viewMode === "split") && (
           <div className="flex items-center gap-2">
-            {/* Animation */}
             <select
               value={animation}
               onChange={(e) => setAnimation(e.target.value as AnimationType)}
@@ -72,19 +75,42 @@ export function CenterPanel({
               <option value="walk">Walk</option>
               <option value="run">Run</option>
             </select>
-
-            {/* Auto-rotate */}
             <button
               onClick={() => setRotating(!rotating)}
               className={`text-xs px-2 py-1 rounded transition-colors ${
-                rotating
-                  ? "bg-forge-accent/20 text-forge-accent"
-                  : "text-forge-text-muted hover:text-forge-text"
+                rotating ? "bg-forge-accent/20 text-forge-accent" : "text-forge-text-muted hover:text-forge-text"
               }`}
               title="Toggle auto-rotate"
             >
               <RotateIcon />
             </button>
+          </div>
+        )}
+
+        {/* 3D Paint controls */}
+        {viewMode === "paint3d" && (
+          <div className="flex items-center gap-3">
+            <div
+              className="w-5 h-5 rounded-sm border-2 border-forge-border shrink-0"
+              style={{ backgroundColor: editorState.color }}
+              title="Current colour"
+            />
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-forge-text-muted">Brush</span>
+              {[1, 2, 3].map((size) => (
+                <button
+                  key={size}
+                  onClick={() => setBrushSize(size)}
+                  className={`w-6 h-6 rounded text-xs font-bold transition-colors ${
+                    brushSize === size
+                      ? "bg-forge-accent text-white"
+                      : "bg-forge-border text-forge-text-muted hover:text-forge-text"
+                  }`}
+                >
+                  {size}
+                </button>
+              ))}
+            </div>
           </div>
         )}
       </div>
@@ -121,6 +147,19 @@ export function CenterPanel({
               bodyType={bodyType}
               animation={animation}
               rotating={rotating}
+            />
+          </div>
+        )}
+
+        {/* 3D Paint mode */}
+        {viewMode === "paint3d" && (
+          <div className="flex-1 min-w-0 h-full">
+            <SkinPainter3D
+              imageData={previewImageData}
+              bodyType={bodyType}
+              color={editorState.color}
+              brushSize={brushSize}
+              onPixelsPaint={onPixelsChange}
             />
           </div>
         )}
