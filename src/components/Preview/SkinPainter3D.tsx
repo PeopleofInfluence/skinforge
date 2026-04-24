@@ -27,11 +27,13 @@ export function SkinPainter3D({
   const imageDataRef = useRef<ImageData | null>(imageData);
   const colorRef = useRef(color);
   const brushSizeRef = useRef(brushSize);
+  const bodyTypeRef = useRef<BodyType>(bodyType);
   const modeRef = useRef<"paint" | "rotate">("rotate");
 
   useEffect(() => { imageDataRef.current = imageData; }, [imageData]);
   useEffect(() => { colorRef.current = color; }, [color]);
   useEffect(() => { brushSizeRef.current = brushSize; }, [brushSize]);
+  useEffect(() => { bodyTypeRef.current = bodyType; }, [bodyType]);
   useEffect(() => { modeRef.current = mode; }, [mode]);
 
   // Toggle outer layer visibility when showOuterLayer changes
@@ -131,9 +133,6 @@ export function SkinPainter3D({
     let rotY = 0;
     let rotX = 0;
 
-    // Capture bodyType at init time via closure — keeps current via ref below
-    const getBodyType = () => bodyTypeRef.current;
-    const bodyTypeRef2 = { current: bodyType };
 
     (async () => {
       const [skinview3d, THREE] = await Promise.all([
@@ -157,7 +156,7 @@ export function SkinPainter3D({
       viewerRef.current = viewer;
 
       if (imageDataRef.current) {
-        reloadSkin(imageDataRef.current, bodyTypeRef2.current);
+        reloadSkin(imageDataRef.current, bodyTypeRef.current);
       }
 
       // Initialise rotation from camera's starting angle so first drag is smooth
@@ -174,7 +173,7 @@ export function SkinPainter3D({
         lastY = e.clientY;
         if (modeRef.current === "paint") {
           e.preventDefault();
-          raycastAndPaint(e, bodyTypeRef2.current);
+          raycastAndPaint(e, bodyTypeRef.current);
         }
       };
 
@@ -203,7 +202,7 @@ export function SkinPainter3D({
           }
         } else if (modeRef.current === "paint") {
           e.preventDefault();
-          raycastAndPaint(e, bodyTypeRef2.current);
+          raycastAndPaint(e, bodyTypeRef.current);
         }
       };
 
