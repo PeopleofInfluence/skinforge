@@ -277,6 +277,7 @@ export default function LandingPage() {
           <a href="#pricing" className="hover:text-forge-text transition-colors">Pricing</a>
         </div>
         <p className="text-xs text-forge-text-muted">© 2025 SkinForge. Not affiliated with Mojang.</p>
+        <p className="text-xs text-forge-text-muted">Created by Erk</p>
       </footer>
     </div>
   );
