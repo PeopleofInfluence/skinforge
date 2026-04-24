@@ -23,7 +23,6 @@ export function SkinPainter3D({
   const threeRef = useRef<any>(null);
   const [mode, setMode] = useState<"paint" | "rotate">("rotate");
 
-  // Keep latest values in refs so event handlers always have fresh data
   const imageDataRef = useRef<ImageData | null>(imageData);
   const colorRef = useRef(color);
   const brushSizeRef = useRef(brushSize);
@@ -34,12 +33,15 @@ export function SkinPainter3D({
   useEffect(() => { colorRef.current = color; }, [color]);
   useEffect(() => { brushSizeRef.current = brushSize; }, [brushSize]);
   useEffect(() => { bodyTypeRef.current = bodyType; }, [bodyType]);
+
+  // Sync mode ref — controls are managed inside the init block
   useEffect(() => {
     modeRef.current = mode;
-    // Enable/disable OrbitControls based on mode
-    if (viewerRef.current?.controls) {
-      viewerRef.current.controls.enabled = mode === "rotate";
-    }
+    const controls = viewerRef.current?.controls;
+    if (!controls) return;
+    // Switch rotate on/off depending on mode
+    controls.enableRotate = mode === "rotate";
+    controls.enablePan   = mode === "rotate";
   }, [mode]);
 
   const hexToRgb = (hex: string) => {
@@ -117,7 +119,6 @@ export function SkinPainter3D({
     }
   }, [paintAtUV]);
 
-  // Build viewer once on mount
   useEffect(() => {
     if (!containerRef.current) return;
     let cleanupFns: (() => void)[] = [];
@@ -143,42 +144,41 @@ export function SkinPainter3D({
       viewer.autoRotate = false;
       viewerRef.current = viewer;
 
-      // Start in rotate mode — controls enabled
+      // Enable rotation controls
       if (viewer.controls) {
-        viewer.controls.enabled = true;
+        viewer.controls.enableRotate = true;
+        viewer.controls.enableZoom = true;
+        viewer.controls.enablePan = false;
       }
 
-      // Load current skin if available
-      if (imageDataRef.current) {
-        reloadSkin(imageDataRef.current);
-      }
+      if (imageDataRef.current) reloadSkin(imageDataRef.current);
 
       const vc = container.querySelector("canvas") as HTMLCanvasElement;
       if (!vc) return;
 
+      // Use capture:true so we intercept BEFORE OrbitControls in paint mode
       const onMouseDown = (e: MouseEvent) => {
         if (modeRef.current !== "paint") return;
-        e.preventDefault();
-        e.stopPropagation();
+        e.stopImmediatePropagation();
         isMouseDown = true;
         raycastAndPaint(e);
       };
 
       const onMouseMove = (e: MouseEvent) => {
         if (modeRef.current !== "paint" || !isMouseDown) return;
-        e.preventDefault();
+        e.stopImmediatePropagation();
         raycastAndPaint(e);
       };
 
       const onMouseUp = () => { isMouseDown = false; };
 
-      vc.addEventListener("mousedown", onMouseDown);
-      vc.addEventListener("mousemove", onMouseMove);
+      vc.addEventListener("mousedown", onMouseDown, { capture: true });
+      vc.addEventListener("mousemove", onMouseMove, { capture: true });
       window.addEventListener("mouseup", onMouseUp);
 
       cleanupFns = [
-        () => vc.removeEventListener("mousedown", onMouseDown),
-        () => vc.removeEventListener("mousemove", onMouseMove),
+        () => vc.removeEventListener("mousedown", onMouseDown, { capture: true }),
+        () => vc.removeEventListener("mousemove", onMouseMove, { capture: true }),
         () => window.removeEventListener("mouseup", onMouseUp),
         () => viewer.dispose(),
       ];
@@ -196,7 +196,7 @@ export function SkinPainter3D({
 
   return (
     <div className="relative w-full h-full flex flex-col">
-      {/* Mode toggle bar */}
+      {/* Mode toggle */}
       <div className="flex items-center justify-center gap-2 py-2 border-b border-forge-border bg-forge-panel shrink-0">
         <button
           onClick={() => setMode("rotate")}
@@ -218,30 +218,27 @@ export function SkinPainter3D({
         >
           🖌️ Paint
         </button>
-
         {mode === "paint" && (
           <div
-            className="w-4 h-4 rounded-sm border border-forge-border ml-2"
+            className="w-4 h-4 rounded-sm border border-forge-border ml-1"
             style={{ backgroundColor: color }}
             title="Current colour"
           />
         )}
       </div>
 
-      {/* 3D Canvas */}
+      {/* Canvas */}
       <div
         ref={containerRef}
         className="relative flex-1 flex items-center justify-center bg-forge-bg"
         style={{ cursor: mode === "paint" ? "crosshair" : "grab" }}
       >
         <canvas className="rounded-xl" />
-
         {!imageData && (
           <div className="absolute inset-0 flex flex-col items-center justify-center text-forge-text-muted text-sm gap-2 pointer-events-none">
             <span>Load a skin to start painting</span>
           </div>
         )}
-
         <div className="absolute bottom-4 left-1/2 -translate-x-1/2 text-xs text-forge-text-muted bg-forge-panel/90 backdrop-blur-sm px-4 py-2 rounded-full pointer-events-none border border-forge-border">
           {mode === "paint" ? "🖌️ Click or drag on the model to paint" : "🖱️ Drag to rotate the model"}
         </div>
