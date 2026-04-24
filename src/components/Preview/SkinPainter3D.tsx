@@ -22,7 +22,8 @@ export function SkinPainter3D({
   const viewerRef = useRef<any>(null);
   const threeRef = useRef<any>(null);
   const [mode, setMode] = useState<"paint" | "rotate">("rotate");
-  const [showOuterLayer, setShowOuterLayer] = useState(true);
+  const [showOuterLayer, setShowOuterLayer] = useState(false); // off by default — hides AI black lines
+  const showOuterLayerRef = useRef(false);
 
   const imageDataRef = useRef<ImageData | null>(imageData);
   const colorRef = useRef(color);
@@ -35,17 +36,27 @@ export function SkinPainter3D({
   useEffect(() => { brushSizeRef.current = brushSize; }, [brushSize]);
   useEffect(() => { bodyTypeRef.current = bodyType; }, [bodyType]);
   useEffect(() => { modeRef.current = mode; }, [mode]);
-
-  // Toggle outer layer visibility when showOuterLayer changes
   useEffect(() => {
+    showOuterLayerRef.current = showOuterLayer;
+    applyOuterLayerVisibility(showOuterLayer);
+  }, [showOuterLayer]);
+
+  const applyOuterLayerVisibility = useCallback((visible: boolean) => {
     const player = viewerRef.current?.playerObject;
     if (!player) return;
+    // Try direct path (skinview3d v2.x)
     const parts = ["head", "body", "rightArm", "leftArm", "rightLeg", "leftLeg"];
     parts.forEach((part) => {
-      const outerLayer = player.skin?.[part]?.outerLayer;
-      if (outerLayer) outerLayer.visible = showOuterLayer;
+      const outer = player.skin?.[part]?.outerLayer;
+      if (outer) outer.visible = visible;
     });
-  }, [showOuterLayer]);
+    // Also traverse the whole scene as fallback
+    viewerRef.current?.scene?.traverse((obj: any) => {
+      if (obj.isMesh && obj.name && obj.name.toLowerCase().includes("outer")) {
+        obj.visible = visible;
+      }
+    });
+  }, []);
 
   const hexToRgb = (hex: string) => {
     const r = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
@@ -60,10 +71,17 @@ export function SkinPainter3D({
     const c = document.createElement("canvas");
     c.width = 64; c.height = 64;
     c.getContext("2d")!.putImageData(data, 0, 0);
-    viewerRef.current.loadSkin(c.toDataURL("image/png"), {
+    const result = viewerRef.current.loadSkin(c.toDataURL("image/png"), {
       model: bt === "slim" ? "slim" : "default",
     });
-  }, []);
+    // Re-apply outer layer visibility after skin loads (loadSkin resets it)
+    const apply = () => applyOuterLayerVisibility(showOuterLayerRef.current);
+    if (result && typeof result.then === "function") {
+      result.then(apply);
+    } else {
+      setTimeout(apply, 150);
+    }
+  }, [applyOuterLayerVisibility]);
 
   const paintAtUV = useCallback((u: number, v: number, bt: BodyType) => {
     const current = imageDataRef.current;
