@@ -188,41 +188,46 @@ export function fixAISkinBlackSides(imageData: ImageData): ImageData {
   const d = copy.data;
   const W = copy.width;
 
-  const isBlack = (i: number) => d[i] < 30 && d[i+1] < 30 && d[i+2] < 30 && d[i+3] > 180;
+  // A pixel needs fixing if it is transparent OR near-black opaque.
+  // Both appear black in the 3D viewer.
+  const needsFill = (i: number) =>
+    d[i+3] < 30 ||                                               // transparent
+    (d[i] < 40 && d[i+1] < 40 && d[i+2] < 40 && d[i+3] > 150); // solid black
 
-  /** Average colour of non-black opaque pixels in a rect */
+  /** Average colour of painted (non-fill-needed, opaque) pixels in a rect */
   const avgColor = (r: Rect): [number,number,number] | null => {
     let rs = 0, gs = 0, bs = 0, n = 0;
     for (let y = r.y; y < r.y + r.h; y++)
       for (let x = r.x; x < r.x + r.w; x++) {
         const i = (y * W + x) * 4;
-        if (!isBlack(i) && d[i+3] > 180) { rs += d[i]; gs += d[i+1]; bs += d[i+2]; n++; }
+        if (!needsFill(i) && d[i+3] > 150) {
+          rs += d[i]; gs += d[i+1]; bs += d[i+2]; n++;
+        }
       }
     return n > 0 ? [Math.round(rs/n), Math.round(gs/n), Math.round(bs/n)] : null;
   };
 
-  /** Fraction of opaque pixels in a rect that are near-black */
-  const blackFraction = (r: Rect): number => {
-    let black = 0, opaque = 0;
+  /** Fraction of pixels in a rect that need filling (transparent or near-black) */
+  const fillFraction = (r: Rect): number => {
+    let bad = 0;
+    const total = r.w * r.h;
     for (let y = r.y; y < r.y + r.h; y++)
-      for (let x = r.x; x < r.x + r.w; x++) {
-        const i = (y * W + x) * 4;
-        if (d[i+3] > 180) { opaque++; if (isBlack(i)) black++; }
-      }
-    return opaque > 0 ? black / opaque : 0;
+      for (let x = r.x; x < r.x + r.w; x++)
+        if (needsFill((y * W + x) * 4)) bad++;
+    return total > 0 ? bad / total : 0;
   };
 
   for (const part of getSkinPartDefs()) {
     const color = avgColor(part.front);
-    if (!color) continue; // front itself is black — nothing useful to spread
+    if (!color) continue; // front face itself is all black/transparent — skip
 
     for (const side of part.sides) {
-      if (blackFraction(side) < 0.5) continue; // mostly painted already
+      if (fillFraction(side) < 0.4) continue; // side is mostly painted — leave it alone
 
       for (let y = side.y; y < side.y + side.h; y++)
         for (let x = side.x; x < side.x + side.w; x++) {
           const i = (y * W + x) * 4;
-          if (isBlack(i)) {
+          if (needsFill(i)) {
             d[i] = color[0]; d[i+1] = color[1]; d[i+2] = color[2]; d[i+3] = 255;
           }
         }
