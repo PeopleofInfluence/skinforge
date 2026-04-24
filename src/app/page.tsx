@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Image from "next/image";
 
 export default function LandingPage() {
   return (
@@ -70,6 +70,30 @@ export default function LandingPage() {
               className="w-6 h-6 rounded-sm"
               style={{ backgroundColor: color }}
             />
+          ))}
+        </div>
+      </section>
+
+      {/* SKIN SHOWCASE */}
+      <section className="px-6 pb-16 max-w-6xl mx-auto">
+        <p className="text-center text-forge-text-muted text-sm mb-8 uppercase tracking-widest font-semibold">
+          Create skins like these
+        </p>
+        <div className="flex flex-wrap justify-center gap-6">
+          {SHOWCASE_SKINS.map((skin) => (
+            <div key={skin.username} className="flex flex-col items-center gap-3 group">
+              <div className="w-24 h-36 rounded-xl border border-forge-border bg-forge-panel flex items-end justify-center overflow-hidden group-hover:border-forge-accent/50 transition-colors">
+                <img
+                  src={`https://mc-heads.net/body/${skin.username}/96`}
+                  alt={skin.label}
+                  width={96}
+                  height={144}
+                  className="object-contain"
+                  style={{ imageRendering: "pixelated" }}
+                />
+              </div>
+              <span className="text-xs text-forge-text-muted">{skin.label}</span>
+            </div>
           ))}
         </div>
       </section>
@@ -357,6 +381,15 @@ const PLANS = [
     popular: false,
     features: ["200 AI generations", "Full pixel editor", "3D preview", "PNG export", "AI remix", "Priority support"],
   },
+];
+
+const SHOWCASE_SKINS = [
+  { username: "Technoblade", label: "Technoblade" },
+  { username: "Dream", label: "Dream" },
+  { username: "Philza", label: "Philza" },
+  { username: "Notch", label: "Notch" },
+  { username: "Grumm", label: "Classic" },
+  { username: "MHF_Alex", label: "Alex" },
 ];
 
 const PIXEL_PREVIEW = [
