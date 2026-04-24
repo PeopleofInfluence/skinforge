@@ -160,6 +160,11 @@ export function SkinPainter3D({
         reloadSkin(imageDataRef.current, bodyTypeRef2.current);
       }
 
+      // Initialise rotation from camera's starting angle so first drag is smooth
+      if (viewer.camera) {
+        rotY = Math.atan2(viewer.camera.position.x, viewer.camera.position.z);
+      }
+
       const vc = container.querySelector("canvas") as HTMLCanvasElement;
       if (!vc) return;
 
@@ -180,13 +185,21 @@ export function SkinPainter3D({
           const dy = e.clientY - lastY;
           lastX = e.clientX;
           lastY = e.clientY;
-          const player = viewer.playerObject;
-          if (player) {
-            rotY += dx * 0.01;
-            rotX += dy * 0.01;
-            rotX = Math.max(-0.6, Math.min(0.6, rotX));
-            player.rotation.y = rotY;
-            player.rotation.x = rotX;
+
+          // Rotate the camera around the model
+          const cam = viewer.camera;
+          if (cam) {
+            rotY -= dx * 0.01;
+            rotX -= dy * 0.005;
+            rotX = Math.max(-0.5, Math.min(0.5, rotX));
+
+            const dist = Math.sqrt(
+              cam.position.x ** 2 + cam.position.z ** 2
+            );
+            cam.position.x = dist * Math.sin(rotY);
+            cam.position.z = dist * Math.cos(rotY);
+            cam.position.y = rotX * 40; // tilt up/down
+            cam.lookAt(0, 0, 0);
           }
         } else if (modeRef.current === "paint") {
           e.preventDefault();
