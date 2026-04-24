@@ -33,16 +33,7 @@ export function SkinPainter3D({
   useEffect(() => { colorRef.current = color; }, [color]);
   useEffect(() => { brushSizeRef.current = brushSize; }, [brushSize]);
   useEffect(() => { bodyTypeRef.current = bodyType; }, [bodyType]);
-
-  // Sync mode ref — controls are managed inside the init block
-  useEffect(() => {
-    modeRef.current = mode;
-    const controls = viewerRef.current?.controls;
-    if (!controls) return;
-    // Switch rotate on/off depending on mode
-    controls.enableRotate = mode === "rotate";
-    controls.enablePan   = mode === "rotate";
-  }, [mode]);
+  useEffect(() => { modeRef.current = mode; }, [mode]);
 
   const hexToRgb = (hex: string) => {
     const r = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
@@ -122,7 +113,13 @@ export function SkinPainter3D({
   useEffect(() => {
     if (!containerRef.current) return;
     let cleanupFns: (() => void)[] = [];
+
+    // Rotation state
     let isMouseDown = false;
+    let lastX = 0;
+    let lastY = 0;
+    let rotY = 0;
+    let rotX = 0;
 
     (async () => {
       const [skinview3d, THREE] = await Promise.all([
@@ -142,43 +139,61 @@ export function SkinPainter3D({
       });
 
       viewer.autoRotate = false;
-      viewerRef.current = viewer;
+      // Disable built-in controls — we handle rotation ourselves
+      if (viewer.controls) viewer.controls.enabled = false;
 
-      // Enable rotation controls
-      if (viewer.controls) {
-        viewer.controls.enableRotate = true;
-        viewer.controls.enableZoom = true;
-        viewer.controls.enablePan = false;
-      }
+      viewerRef.current = viewer;
 
       if (imageDataRef.current) reloadSkin(imageDataRef.current);
 
       const vc = container.querySelector("canvas") as HTMLCanvasElement;
       if (!vc) return;
 
-      // Use capture:true so we intercept BEFORE OrbitControls in paint mode
       const onMouseDown = (e: MouseEvent) => {
-        if (modeRef.current !== "paint") return;
-        e.stopImmediatePropagation();
         isMouseDown = true;
-        raycastAndPaint(e);
+        lastX = e.clientX;
+        lastY = e.clientY;
+
+        if (modeRef.current === "paint") {
+          e.preventDefault();
+          raycastAndPaint(e);
+        }
       };
 
       const onMouseMove = (e: MouseEvent) => {
-        if (modeRef.current !== "paint" || !isMouseDown) return;
-        e.stopImmediatePropagation();
-        raycastAndPaint(e);
+        if (!isMouseDown) return;
+
+        if (modeRef.current === "rotate") {
+          const dx = e.clientX - lastX;
+          const dy = e.clientY - lastY;
+          lastX = e.clientX;
+          lastY = e.clientY;
+
+          // Manually rotate the player object
+          const player = viewer.playerObject;
+          if (player) {
+            rotY += dx * 0.01;
+            rotX += dy * 0.01;
+            // Clamp vertical rotation so it doesn't flip upside down
+            rotX = Math.max(-0.6, Math.min(0.6, rotX));
+            player.rotation.y = rotY;
+            player.rotation.x = rotX;
+          }
+        } else if (modeRef.current === "paint") {
+          e.preventDefault();
+          raycastAndPaint(e);
+        }
       };
 
       const onMouseUp = () => { isMouseDown = false; };
 
-      vc.addEventListener("mousedown", onMouseDown, { capture: true });
-      vc.addEventListener("mousemove", onMouseMove, { capture: true });
+      vc.addEventListener("mousedown", onMouseDown);
+      vc.addEventListener("mousemove", onMouseMove);
       window.addEventListener("mouseup", onMouseUp);
 
       cleanupFns = [
-        () => vc.removeEventListener("mousedown", onMouseDown, { capture: true }),
-        () => vc.removeEventListener("mousemove", onMouseMove, { capture: true }),
+        () => vc.removeEventListener("mousedown", onMouseDown),
+        () => vc.removeEventListener("mousemove", onMouseMove),
         () => window.removeEventListener("mouseup", onMouseUp),
         () => viewer.dispose(),
       ];
@@ -188,7 +203,6 @@ export function SkinPainter3D({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Reload skin when imageData changes externally
   useEffect(() => {
     if (!viewerRef.current || !imageData) return;
     reloadSkin(imageData);
@@ -220,7 +234,7 @@ export function SkinPainter3D({
         </button>
         {mode === "paint" && (
           <div
-            className="w-4 h-4 rounded-sm border border-forge-border ml-1"
+            className="w-4 h-4 rounded-sm border border-forge-border ml-1 shrink-0"
             style={{ backgroundColor: color }}
             title="Current colour"
           />
