@@ -43,16 +43,23 @@ export function usePixelEditor({
   const historyRef = useRef<ImageData[]>([]);
   const futureRef = useRef<ImageData[]>([]);
 
-  // Keep a ref to current imageData to avoid stale closures
+  // Keep refs to current values — avoids ALL stale closure issues
   const imageDataRef = useRef<ImageData>(imageData);
+  const editorStateRef = useRef<EditorState>(editorState);
+  const onColorPickRef = useRef(onColorPick);
+  const onPixelsChangeRef = useRef(onPixelsChange);
+
   useEffect(() => { imageDataRef.current = imageData; }, [imageData]);
+  useEffect(() => { editorStateRef.current = editorState; }, [editorState]);
+  useEffect(() => { onColorPickRef.current = onColorPick; }, [onColorPick]);
+  useEffect(() => { onPixelsChangeRef.current = onPixelsChange; }, [onPixelsChange]);
 
   const setImageData = useCallback((data: ImageData) => {
     imageDataRef.current = data;
     setImageDataState(data);
   }, []);
 
-  // Commit current state to undo history
+  // Commit current state to undo history before a change
   const commitHistory = useCallback(() => {
     historyRef.current.push(cloneImageData(imageDataRef.current));
     if (historyRef.current.length > 50) historyRef.current.shift();
@@ -72,9 +79,10 @@ export function usePixelEditor({
       ctx.clearRect(0, 0, SKIN_WIDTH, SKIN_HEIGHT);
       ctx.putImageData(data, 0, 0);
 
-      if (editorState.showGrid && editorState.zoom >= 4) {
+      const { showGrid, zoom } = editorStateRef.current;
+      if (showGrid && zoom >= 4) {
         ctx.strokeStyle = "rgba(255,255,255,0.08)";
-        ctx.lineWidth = 0.5 / editorState.zoom;
+        ctx.lineWidth = 0.5 / zoom;
         for (let x = 0; x <= SKIN_WIDTH; x++) {
           ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, SKIN_HEIGHT); ctx.stroke();
         }
@@ -83,10 +91,16 @@ export function usePixelEditor({
         }
       }
     },
-    [canvasRef, editorState.showGrid, editorState.zoom]
+    [canvasRef]
   );
 
   useEffect(() => { render(imageData); }, [imageData, render]);
+
+  // Re-render when grid/zoom changes without changing imageData
+  useEffect(() => {
+    render(imageDataRef.current);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editorState.showGrid, editorState.zoom]);
 
   const getPixelCoords = useCallback(
     (e: React.MouseEvent<HTMLCanvasElement> | MouseEvent) => {
@@ -109,12 +123,16 @@ export function usePixelEditor({
       const idx = (y * SKIN_WIDTH + x) * 4;
 
       if (tool === "eraser") {
-        newData.data[idx] = 0; newData.data[idx + 1] = 0;
-        newData.data[idx + 2] = 0; newData.data[idx + 3] = 0;
+        newData.data[idx] = 0;
+        newData.data[idx + 1] = 0;
+        newData.data[idx + 2] = 0;
+        newData.data[idx + 3] = 0;
       } else if (tool === "pencil") {
         const [r, g, b, a] = hexToRgba(color);
-        newData.data[idx] = r; newData.data[idx + 1] = g;
-        newData.data[idx + 2] = b; newData.data[idx + 3] = a;
+        newData.data[idx] = r;
+        newData.data[idx + 1] = g;
+        newData.data[idx + 2] = b;
+        newData.data[idx + 3] = a;
       } else if (tool === "brighten") {
         if (newData.data[idx + 3] > 0) {
           newData.data[idx]     = Math.min(255, Math.round(newData.data[idx] * 1.25));
@@ -137,12 +155,19 @@ export function usePixelEditor({
     (e: React.MouseEvent<HTMLCanvasElement>) => {
       const pos = getPixelCoords(e);
       if (!pos) return;
-      const { tool, color } = editorState;
+
+      // Always read tool/color from ref — never stale
+      const { tool, color } = editorStateRef.current;
 
       if (tool === "eyedropper") {
         const current = imageDataRef.current;
         const idx = (pos.y * SKIN_WIDTH + pos.x) * 4;
-        onColorPick?.(rgbaToHex(current.data[idx], current.data[idx + 1], current.data[idx + 2]));
+        const hex = rgbaToHex(
+          current.data[idx],
+          current.data[idx + 1],
+          current.data[idx + 2]
+        );
+        onColorPickRef.current?.(hex);
         return;
       }
 
@@ -151,18 +176,19 @@ export function usePixelEditor({
         const [r, g, b, a] = hexToRgba(color);
         const filled = floodFill(imageDataRef.current, pos.x, pos.y, [r, g, b, a]);
         setImageData(filled);
-        onPixelsChange?.(filled);
+        onPixelsChangeRef.current?.(filled);
         return;
       }
 
+      // Pencil, eraser, brighten, darken — start stroke
       commitHistory();
       isDrawing.current = true;
       lastPos.current = pos;
       const updated = paintPixel(imageDataRef.current, pos.x, pos.y, tool, color);
       setImageData(updated);
-      onPixelsChange?.(updated);
+      onPixelsChangeRef.current?.(updated);
     },
-    [commitHistory, editorState, getPixelCoords, onColorPick, onPixelsChange, paintPixel, setImageData]
+    [commitHistory, getPixelCoords, paintPixel, setImageData]
   );
 
   const handlePointerMove = useCallback(
@@ -170,9 +196,15 @@ export function usePixelEditor({
       if (!isDrawing.current) return;
       const pos = getPixelCoords(e);
       if (!pos) return;
-      const { tool, color } = editorState;
 
-      if (tool === "pencil" || tool === "eraser" || tool === "brighten" || tool === "darken") {
+      const { tool, color } = editorStateRef.current;
+
+      if (
+        tool === "pencil" ||
+        tool === "eraser" ||
+        tool === "brighten" ||
+        tool === "darken"
+      ) {
         const last = lastPos.current ?? pos;
         const dx = pos.x - last.x;
         const dy = pos.y - last.y;
@@ -186,10 +218,10 @@ export function usePixelEditor({
         }
         lastPos.current = pos;
         setImageData(current);
-        onPixelsChange?.(current);
+        onPixelsChangeRef.current?.(current);
       }
     },
-    [editorState, getPixelCoords, onPixelsChange, paintPixel, setImageData]
+    [getPixelCoords, paintPixel, setImageData]
   );
 
   const handlePointerUp = useCallback(() => {
@@ -202,22 +234,22 @@ export function usePixelEditor({
     if (prev) {
       futureRef.current.push(cloneImageData(imageDataRef.current));
       setImageData(prev);
-      onPixelsChange?.(prev);
+      onPixelsChangeRef.current?.(prev);
       setCanUndo(historyRef.current.length > 0);
       setCanRedo(true);
     }
-  }, [onPixelsChange, setImageData]);
+  }, [setImageData]);
 
   const redo = useCallback(() => {
     const next = futureRef.current.pop();
     if (next) {
       historyRef.current.push(cloneImageData(imageDataRef.current));
       setImageData(next);
-      onPixelsChange?.(next);
+      onPixelsChangeRef.current?.(next);
       setCanUndo(true);
       setCanRedo(futureRef.current.length > 0);
     }
-  }, [onPixelsChange, setImageData]);
+  }, [setImageData]);
 
   const loadImageData = useCallback(
     (data: ImageData) => {
@@ -226,9 +258,9 @@ export function usePixelEditor({
       setCanUndo(false);
       setCanRedo(false);
       setImageData(cloneImageData(data));
-      onPixelsChange?.(data);
+      onPixelsChangeRef.current?.(data);
     },
-    [onPixelsChange, setImageData]
+    [setImageData]
   );
 
   return {
