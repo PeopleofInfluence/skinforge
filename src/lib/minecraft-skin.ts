@@ -115,6 +115,44 @@ export function createBlankSkin(): ImageData {
   return new ImageData(SKIN_WIDTH, SKIN_HEIGHT);
 }
 
+/**
+ * Returns a copy of the ImageData with all outer layer (jacket/hat/sleeve)
+ * pixel regions cleared to transparent. Used to hide the outer layer in the
+ * 3D viewer without relying on skinview3d mesh visibility APIs.
+ *
+ * Outer layer UV regions (64×64 modern skin format):
+ *   Hat        x=32..63  y=0..15
+ *   R-leg-out  x=0..15   y=32..47
+ *   Body-out   x=16..31  y=32..47
+ *   R-arm-out  x=40..55  y=32..47
+ *   L-leg-out  x=0..15   y=48..63
+ *   L-arm-out  x=48..63  y=48..63
+ */
+export function stripOuterLayer(src: ImageData): ImageData {
+  const copy = new ImageData(new Uint8ClampedArray(src.data), src.width, src.height);
+  const w = src.width;
+  const regions = [
+    { x: 32, y: 0,  w: 32, h: 16 }, // hat / head outer
+    { x: 0,  y: 32, w: 16, h: 16 }, // right leg outer
+    { x: 16, y: 32, w: 16, h: 16 }, // body outer (jacket)
+    { x: 40, y: 32, w: 16, h: 16 }, // right arm outer (sleeve)
+    { x: 0,  y: 48, w: 16, h: 16 }, // left leg outer
+    { x: 48, y: 48, w: 16, h: 16 }, // left arm outer (sleeve)
+  ];
+  for (const r of regions) {
+    for (let py = r.y; py < r.y + r.h && py < src.height; py++) {
+      for (let px = r.x; px < r.x + r.w && px < w; px++) {
+        const idx = (py * w + px) * 4;
+        copy.data[idx] = 0;
+        copy.data[idx + 1] = 0;
+        copy.data[idx + 2] = 0;
+        copy.data[idx + 3] = 0;
+      }
+    }
+  }
+  return copy;
+}
+
 /** Flood fill algorithm for the paint bucket tool */
 export function floodFill(
   imageData: ImageData,

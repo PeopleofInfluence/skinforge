@@ -2,6 +2,7 @@
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useEffect, useRef, useCallback, useState } from "react";
+import { stripOuterLayer } from "@/lib/minecraft-skin";
 import type { BodyType, AnimationType } from "@/types";
 
 interface SkinPreview3DProps {
@@ -29,35 +30,28 @@ export function SkinPreview3D({
   useEffect(() => { imageDataRef.current = imageData; }, [imageData]);
   useEffect(() => { bodyTypeRef.current = bodyType; }, [bodyType]);
 
-  // Hide/show all outer layer meshes
-  const applyOuterLayerVisibility = useCallback((visible: boolean) => {
-    const viewer = viewerRef.current;
-    if (!viewer) return;
-    const parts = ["head", "body", "rightArm", "leftArm", "rightLeg", "leftLeg"];
-    parts.forEach((part) => {
-      const outer = viewer.playerObject?.skin?.[part]?.outerLayer;
-      if (outer) outer.visible = visible;
-    });
-    viewer.scene?.traverse((obj: any) => {
-      if (obj.isMesh && obj.name?.toLowerCase().includes("outer")) {
-        obj.visible = visible;
-      }
-    });
-  }, []);
 
   useEffect(() => {
     showOuterRef.current = showOuter;
-    applyOuterLayerVisibility(showOuter);
-  }, [showOuter, applyOuterLayerVisibility]);
+    // Reload skin with/without outer layer pixels when toggle changes
+    if (imageDataRef.current) {
+      loadSkinToViewer(imageDataRef.current, bodyTypeRef.current);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showOuter]);
 
   // Central function to load skin + apply model type + outer visibility
   const loadSkinToViewer = useCallback((data: ImageData, bt: BodyType) => {
     const viewer = viewerRef.current;
     if (!viewer) return;
 
+    // Strip outer layer pixels from the texture when outer is hidden —
+    // more reliable than trying to hide skinview3d meshes by name.
+    const skinData = showOuterRef.current ? data : stripOuterLayer(data);
+
     const canvas = document.createElement("canvas");
     canvas.width = 64; canvas.height = 64;
-    canvas.getContext("2d")!.putImageData(data, 0, 0);
+    canvas.getContext("2d")!.putImageData(skinData, 0, 0);
     const dataUrl = canvas.toDataURL("image/png");
 
     const isSlim = bt === "slim";
@@ -67,18 +61,10 @@ export function SkinPreview3D({
       viewer.playerObject.slim = isSlim;
     }
 
-    const result = viewer.loadSkin(dataUrl, {
+    viewer.loadSkin(dataUrl, {
       model: isSlim ? "slim" : "default",
     });
-
-    // Re-apply outer layer visibility after loadSkin resets it
-    const apply = () => applyOuterLayerVisibility(showOuterRef.current);
-    if (result && typeof result.then === "function") {
-      result.then(apply);
-    } else {
-      setTimeout(apply, 150);
-    }
-  }, [applyOuterLayerVisibility]);
+  }, []);
 
   // Build the viewer once on mount, then load skin if already available
   useEffect(() => {

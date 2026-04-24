@@ -1,6 +1,7 @@
 "use client";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useEffect, useRef, useCallback, useState } from "react";
+import { stripOuterLayer } from "@/lib/minecraft-skin";
 import type { BodyType } from "@/types";
 
 interface SkinPainter3DProps {
@@ -38,25 +39,12 @@ export function SkinPainter3D({
   useEffect(() => { modeRef.current = mode; }, [mode]);
   useEffect(() => {
     showOuterLayerRef.current = showOuterLayer;
-    applyOuterLayerVisibility(showOuterLayer);
+    // Reload skin with/without outer pixels when toggle changes
+    if (imageDataRef.current) {
+      reloadSkin(imageDataRef.current, bodyTypeRef.current);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showOuterLayer]);
-
-  const applyOuterLayerVisibility = useCallback((visible: boolean) => {
-    const player = viewerRef.current?.playerObject;
-    if (!player) return;
-    // Try direct path (skinview3d v2.x)
-    const parts = ["head", "body", "rightArm", "leftArm", "rightLeg", "leftLeg"];
-    parts.forEach((part) => {
-      const outer = player.skin?.[part]?.outerLayer;
-      if (outer) outer.visible = visible;
-    });
-    // Also traverse the whole scene as fallback
-    viewerRef.current?.scene?.traverse((obj: any) => {
-      if (obj.isMesh && obj.name && obj.name.toLowerCase().includes("outer")) {
-        obj.visible = visible;
-      }
-    });
-  }, []);
 
   const hexToRgb = (hex: string) => {
     const r = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
@@ -68,28 +56,24 @@ export function SkinPainter3D({
   // Pass bodyType directly so it's always correct
   const reloadSkin = useCallback((data: ImageData, bt: BodyType) => {
     if (!viewerRef.current) return;
+
+    // Strip outer layer pixels from texture when outer layer is hidden —
+    // far more reliable than trying to hide skinview3d meshes by name.
+    const skinData = showOuterLayerRef.current ? data : stripOuterLayer(data);
+
     const c = document.createElement("canvas");
     c.width = 64; c.height = 64;
-    c.getContext("2d")!.putImageData(data, 0, 0);
+    c.getContext("2d")!.putImageData(skinData, 0, 0);
 
     const isSlim = bt === "slim";
-
-    // Set slim directly on the player object — most reliable way
     if (viewerRef.current.playerObject) {
       viewerRef.current.playerObject.slim = isSlim;
     }
 
-    const result = viewerRef.current.loadSkin(c.toDataURL("image/png"), {
+    viewerRef.current.loadSkin(c.toDataURL("image/png"), {
       model: isSlim ? "slim" : "default",
     });
-    // Re-apply outer layer visibility after skin loads (loadSkin resets it)
-    const apply = () => applyOuterLayerVisibility(showOuterLayerRef.current);
-    if (result && typeof result.then === "function") {
-      result.then(apply);
-    } else {
-      setTimeout(apply, 150);
-    }
-  }, [applyOuterLayerVisibility]);
+  }, []);
 
   const paintAtUV = useCallback((u: number, v: number, bt: BodyType) => {
     const current = imageDataRef.current;
