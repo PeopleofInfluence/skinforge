@@ -100,6 +100,17 @@ export default function LandingPage() {
             </div>
           ))}
         </div>
+
+        {/* CTA after features */}
+        <div className="flex flex-col items-center gap-3 mt-16">
+          <p className="text-forge-text-muted text-lg">Seen enough? Let&apos;s build something.</p>
+          <a
+            href="/editor"
+            className="px-10 py-4 rounded-xl bg-forge-accent hover:bg-forge-accent-hover text-white text-lg font-bold transition-all hover:scale-105 shadow-lg shadow-forge-accent/30"
+          >
+            Build Your Skin →
+          </a>
+        </div>
       </section>
 
       {/* HOW IT WORKS */}
