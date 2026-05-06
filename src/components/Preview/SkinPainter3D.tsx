@@ -23,8 +23,9 @@ export function SkinPainter3D({
   const viewerRef = useRef<any>(null);
   const threeRef = useRef<any>(null);
   const [mode, setMode] = useState<"paint" | "rotate">("paint");
-  const [showOuterLayer, setShowOuterLayer] = useState(false); // off by default — hides AI black lines
+  const [showOuterLayer, setShowOuterLayer] = useState(false);
   const showOuterLayerRef = useRef(false);
+  const [initError, setInitError] = useState<string | null>(null);
 
   const imageDataRef = useRef<ImageData | null>(imageData);
   const colorRef = useRef(color);
@@ -151,6 +152,7 @@ export function SkinPainter3D({
 
 
     (async () => {
+      try {
       const [skinview3d, THREE] = await Promise.all([
         import("skinview3d"),
         import("three"),
@@ -251,6 +253,10 @@ export function SkinPainter3D({
         () => window.removeEventListener("mouseup", onMouseUp),
         () => viewer.dispose(),
       ];
+      } catch (err: any) {
+        console.error("[SkinPainter3D] init failed:", err);
+        setInitError(err?.message ?? String(err));
+      }
     })();
 
     return () => cleanupFns.forEach((fn) => fn());
@@ -315,9 +321,17 @@ export function SkinPainter3D({
       >
         {/* Canvas fills the container; skinview3d owns its actual pixel dimensions */}
         <canvas className="absolute inset-0 w-full h-full" />
-        {!imageData && (
+        {/* Init error overlay — only visible when skinview3d fails to load */}
+        {initError && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-forge-bg/90 pointer-events-none p-4">
+            <span className="text-red-400 font-semibold text-sm">3D viewer failed to load</span>
+            <span className="text-forge-text-muted text-xs text-center max-w-xs">{initError}</span>
+            <span className="text-forge-text-muted text-xs">Check the browser console (F12) for details</span>
+          </div>
+        )}
+        {!imageData && !initError && (
           <div className="absolute inset-0 flex flex-col items-center justify-center text-forge-text-muted text-sm gap-2 pointer-events-none">
-            <span>Load a skin to start painting</span>
+            <span>Load a skin first, then paint here</span>
           </div>
         )}
         <div className="absolute bottom-4 left-1/2 -translate-x-1/2 text-xs text-forge-text-muted bg-forge-panel/90 backdrop-blur-sm px-4 py-2 rounded-full pointer-events-none border border-forge-border whitespace-nowrap">
