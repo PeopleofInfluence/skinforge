@@ -22,7 +22,7 @@ export function SkinPainter3D({
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<any>(null);
   const threeRef = useRef<any>(null);
-  const [mode, setMode] = useState<"paint" | "rotate">("rotate");
+  const [mode, setMode] = useState<"paint" | "rotate">("paint");
   const [showOuterLayer, setShowOuterLayer] = useState(false); // off by default — hides AI black lines
   const showOuterLayerRef = useRef(false);
 
@@ -30,7 +30,7 @@ export function SkinPainter3D({
   const colorRef = useRef(color);
   const brushSizeRef = useRef(brushSize);
   const bodyTypeRef = useRef<BodyType>(bodyType);
-  const modeRef = useRef<"paint" | "rotate">("rotate");
+  const modeRef = useRef<"paint" | "rotate">("paint");
 
   useEffect(() => { imageDataRef.current = imageData; }, [imageData]);
   useEffect(() => { colorRef.current = color; }, [color]);
@@ -86,12 +86,14 @@ export function SkinPainter3D({
     );
 
     const { r, g, b } = hexToRgb(colorRef.current);
-    const cx = Math.floor(u * 64);
-    const cy = Math.floor((1 - v) * 64);
-    const half = Math.floor(brushSizeRef.current / 2);
+    const cx = Math.min(63, Math.floor(u * 64));
+    const cy = Math.min(63, Math.floor((1 - v) * 64));
+    const bs = brushSizeRef.current;
+    // Same centred-offset formula as the 2D pixel editor
+    const half = Math.floor((bs - 1) / 2);
 
-    for (let dy = -half; dy <= half; dy++) {
-      for (let dx = -half; dx <= half; dx++) {
+    for (let dy = -half; dy < bs - half; dy++) {
+      for (let dx = -half; dx < bs - half; dx++) {
         const px = Math.max(0, Math.min(63, cx + dx));
         const py = Math.max(0, Math.min(63, cy + dy));
         const idx = (py * 64 + px) * 4;
@@ -122,14 +124,18 @@ export function SkinPainter3D({
     const raycaster = new THREE.Raycaster();
     raycaster.setFromCamera(new THREE.Vector2(mx, my), viewer.camera);
 
-    const meshes: any[] = [];
-    viewer.scene.traverse((obj: any) => {
-      if (obj.isMesh) meshes.push(obj);
-    });
+    // Use the playerObject directly so we don't accidentally hit lights/helpers,
+    // and pass recursive=true so all nested body-part meshes are tested.
+    const root = viewer.playerObject ?? viewer.scene;
+    const hits = raycaster.intersectObjects([root], true);
 
-    const hits = raycaster.intersectObjects(meshes, false);
-    if (hits.length > 0 && hits[0].uv) {
-      paintAtUV(hits[0].uv.x, hits[0].uv.y, bt);
+    // Find the first hit that has UV info (skip any inner/outer layer duplicates
+    // that share the same intersection point but lack UV data)
+    for (const hit of hits) {
+      if (hit.uv) {
+        paintAtUV(hit.uv.x, hit.uv.y, bt);
+        break;
+      }
     }
   }, [paintAtUV]);
 
