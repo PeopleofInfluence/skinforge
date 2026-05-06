@@ -22,6 +22,7 @@ export function SkinPainter3D({
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<any>(null);
   const threeRef = useRef<any>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [mode, setMode] = useState<"paint" | "rotate">("paint");
   const [showOuterLayer, setShowOuterLayer] = useState(false);
   const showOuterLayerRef = useRef(false);
@@ -38,12 +39,10 @@ export function SkinPainter3D({
   useEffect(() => { brushSizeRef.current = brushSize; }, [brushSize]);
   useEffect(() => { bodyTypeRef.current = bodyType; }, [bodyType]);
   useEffect(() => { modeRef.current = mode; }, [mode]);
+
   useEffect(() => {
     showOuterLayerRef.current = showOuterLayer;
-    // Reload skin with/without outer pixels when toggle changes
-    if (imageDataRef.current) {
-      reloadSkin(imageDataRef.current, bodyTypeRef.current);
-    }
+    if (imageDataRef.current) reloadSkin(imageDataRef.current, bodyTypeRef.current);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showOuterLayer]);
 
@@ -54,26 +53,25 @@ export function SkinPainter3D({
       : { r: 0, g: 0, b: 0 };
   };
 
-  // Pass bodyType directly so it's always correct
+  /**
+   * Load the current skin ImageData into the viewer.
+   * IMPORTANT: loadSkin(source, model) — second arg is a model type STRING
+   * ("slim" | "default" | "auto-detect"), NOT an options object.
+   * playerObject.skin.modelType is the correct way to change arm width.
+   */
   const reloadSkin = useCallback((data: ImageData, bt: BodyType) => {
     if (!viewerRef.current) return;
 
-    // Strip outer layer pixels from texture when outer layer is hidden —
-    // far more reliable than trying to hide skinview3d meshes by name.
     const skinData = showOuterLayerRef.current ? data : stripOuterLayer(data);
-
     const c = document.createElement("canvas");
     c.width = 64; c.height = 64;
     c.getContext("2d")!.putImageData(skinData, 0, 0);
 
-    const isSlim = bt === "slim";
-    if (viewerRef.current.playerObject) {
-      viewerRef.current.playerObject.slim = isSlim;
-    }
+    const modelType = bt === "slim" ? "slim" : "default";
 
-    viewerRef.current.loadSkin(c.toDataURL("image/png"), {
-      model: isSlim ? "slim" : "default",
-    });
+    // Pass canvas element directly (synchronous TextureSource path)
+    // and the model type string as the second argument — NOT an options object.
+    viewerRef.current.loadSkin(c, modelType);
   }, []);
 
   const paintAtUV = useCallback((u: number, v: number, bt: BodyType) => {
@@ -90,7 +88,6 @@ export function SkinPainter3D({
     const cx = Math.min(63, Math.floor(u * 64));
     const cy = Math.min(63, Math.floor((1 - v) * 64));
     const bs = brushSizeRef.current;
-    // Same centred-offset formula as the 2D pixel editor
     const half = Math.floor((bs - 1) / 2);
 
     for (let dy = -half; dy < bs - half; dy++) {
@@ -113,25 +110,19 @@ export function SkinPainter3D({
   const raycastAndPaint = useCallback((event: MouseEvent, bt: BodyType) => {
     const viewer = viewerRef.current;
     const THREE = threeRef.current;
-    if (!viewer || !THREE || !containerRef.current) return;
+    const vc = canvasRef.current;
+    if (!viewer || !THREE || !vc) return;
 
-    const canvas = containerRef.current.querySelector("canvas");
-    if (!canvas) return;
-
-    const rect = canvas.getBoundingClientRect();
+    const rect = vc.getBoundingClientRect();
     const mx = ((event.clientX - rect.left) / rect.width) * 2 - 1;
     const my = -((event.clientY - rect.top) / rect.height) * 2 + 1;
 
     const raycaster = new THREE.Raycaster();
     raycaster.setFromCamera(new THREE.Vector2(mx, my), viewer.camera);
 
-    // Use the playerObject directly so we don't accidentally hit lights/helpers,
-    // and pass recursive=true so all nested body-part meshes are tested.
-    const root = viewer.playerObject ?? viewer.scene;
-    const hits = raycaster.intersectObjects([root], true);
+    // Intersect against the whole player hierarchy (recursive)
+    const hits = raycaster.intersectObjects([viewer.playerObject], true);
 
-    // Find the first hit that has UV info (skip any inner/outer layer duplicates
-    // that share the same intersection point but lack UV data)
     for (const hit of hits) {
       if (hit.uv) {
         paintAtUV(hit.uv.x, hit.uv.y, bt);
@@ -150,109 +141,119 @@ export function SkinPainter3D({
     let rotY = 0;
     let rotX = 0;
 
-
     (async () => {
       try {
-      const [skinview3d, THREE] = await Promise.all([
-        import("skinview3d"),
-        import("three"),
-      ]);
+        const [skinview3d, THREE] = await Promise.all([
+          import("skinview3d"),
+          import("three"),
+        ]);
 
-      threeRef.current = THREE;
-      if (!containerRef.current) return;
-      if (viewerRef.current) viewerRef.current.dispose();
+        threeRef.current = THREE;
+        if (!containerRef.current) return;
+        if (viewerRef.current) viewerRef.current.dispose();
 
-      const container = containerRef.current;
+        const container = containerRef.current;
+        const w = Math.max(container.clientWidth, 100);
+        const h = Math.max(container.clientHeight, 100);
 
-      // Use a small initial size — ResizeObserver sets the real dimensions right away
-      const viewer = new (skinview3d as any).SkinViewer({
-        canvas: container.querySelector("canvas"),
-        width: 64,
-        height: 64,
-      });
+        // Do NOT pass a canvas — let skinview3d create its own.
+        // This avoids all "wrong canvas element" confusion.
+        const viewer = new (skinview3d as any).SkinViewer({
+          width: w,
+          height: h,
+          // Set a visible background so the model is always visible
+          // even when the skin has transparent pixels.
+          background: 0x1a1a2e,
+        });
 
-      viewer.autoRotate = false;
-      if (viewer.controls) viewer.controls.enabled = false;
-      viewerRef.current = viewer;
+        viewer.autoRotate = false;
+        // Disable OrbitControls — we handle mouse ourselves
+        if (viewer.controls) viewer.controls.enabled = false;
+        viewerRef.current = viewer;
 
-      // Size the viewer to the actual container, and keep it in sync on resize
-      const updateSize = () => {
-        const c = containerRef.current;
-        const v = viewerRef.current;
-        if (!c || !v) return;
-        const w = c.clientWidth;
-        const h = c.clientHeight;
-        if (w > 0 && h > 0) v.setSize(w, h);
-      };
-      updateSize();
-      const ro = new ResizeObserver(updateSize);
-      ro.observe(container);
-      cleanupFns.push(() => ro.disconnect());
+        // Append skinview3d's canvas to our container and style it to fill
+        const vc = viewer.canvas as HTMLCanvasElement;
+        canvasRef.current = vc;
+        vc.style.position = "absolute";
+        vc.style.inset = "0";
+        vc.style.width = "100%";
+        vc.style.height = "100%";
+        container.appendChild(vc);
 
-      if (imageDataRef.current) {
-        reloadSkin(imageDataRef.current, bodyTypeRef.current);
-      }
+        // Keep viewer sized to container (handles window resize etc.)
+        const updateSize = () => {
+          const c = containerRef.current;
+          const v = viewerRef.current;
+          if (!c || !v) return;
+          const cw = c.clientWidth;
+          const ch = c.clientHeight;
+          if (cw > 0 && ch > 0) v.setSize(cw, ch);
+        };
+        const ro = new ResizeObserver(updateSize);
+        ro.observe(container);
+        cleanupFns.push(() => ro.disconnect());
 
-      // Initialise rotation from camera's starting angle so first drag is smooth
-      if (viewer.camera) {
-        rotY = Math.atan2(viewer.camera.position.x, viewer.camera.position.z);
-      }
-
-      // Use viewer.canvas directly — more reliable than querySelector after init
-      const vc = (viewer.canvas ?? container.querySelector("canvas")) as HTMLCanvasElement;
-      if (!vc) return;
-
-      const onMouseDown = (e: MouseEvent) => {
-        isMouseDown = true;
-        lastX = e.clientX;
-        lastY = e.clientY;
-        if (modeRef.current === "paint") {
-          e.preventDefault();
-          raycastAndPaint(e, bodyTypeRef.current);
+        if (imageDataRef.current) {
+          reloadSkin(imageDataRef.current, bodyTypeRef.current);
         }
-      };
 
-      const onMouseMove = (e: MouseEvent) => {
-        if (!isMouseDown) return;
-        if (modeRef.current === "rotate") {
-          const dx = e.clientX - lastX;
-          const dy = e.clientY - lastY;
+        // Capture initial camera angle for smooth rotation
+        if (viewer.camera) {
+          rotY = Math.atan2(viewer.camera.position.x, viewer.camera.position.z);
+        }
+
+        const onMouseDown = (e: MouseEvent) => {
+          isMouseDown = true;
           lastX = e.clientX;
           lastY = e.clientY;
-
-          // Rotate the camera around the model
-          const cam = viewer.camera;
-          if (cam) {
-            rotY -= dx * 0.01;
-            rotX -= dy * 0.005;
-            rotX = Math.max(-0.5, Math.min(0.5, rotX));
-
-            const dist = Math.sqrt(
-              cam.position.x ** 2 + cam.position.z ** 2
-            );
-            cam.position.x = dist * Math.sin(rotY);
-            cam.position.z = dist * Math.cos(rotY);
-            cam.position.y = rotX * 40; // tilt up/down
-            cam.lookAt(0, 0, 0);
+          if (modeRef.current === "paint") {
+            e.preventDefault();
+            raycastAndPaint(e, bodyTypeRef.current);
           }
-        } else if (modeRef.current === "paint") {
-          e.preventDefault();
-          raycastAndPaint(e, bodyTypeRef.current);
-        }
-      };
+        };
 
-      const onMouseUp = () => { isMouseDown = false; };
+        const onMouseMove = (e: MouseEvent) => {
+          if (!isMouseDown) return;
+          if (modeRef.current === "rotate") {
+            const dx = e.clientX - lastX;
+            const dy = e.clientY - lastY;
+            lastX = e.clientX;
+            lastY = e.clientY;
 
-      vc.addEventListener("mousedown", onMouseDown);
-      vc.addEventListener("mousemove", onMouseMove);
-      window.addEventListener("mouseup", onMouseUp);
+            const cam = viewer.camera;
+            if (cam) {
+              rotY -= dx * 0.01;
+              rotX -= dy * 0.005;
+              rotX = Math.max(-0.5, Math.min(0.5, rotX));
+              const dist = Math.sqrt(cam.position.x ** 2 + cam.position.z ** 2);
+              cam.position.x = dist * Math.sin(rotY);
+              cam.position.z = dist * Math.cos(rotY);
+              cam.position.y = rotX * 40;
+              cam.lookAt(0, 0, 0);
+            }
+          } else if (modeRef.current === "paint") {
+            e.preventDefault();
+            raycastAndPaint(e, bodyTypeRef.current);
+          }
+        };
 
-      cleanupFns = [
-        () => vc.removeEventListener("mousedown", onMouseDown),
-        () => vc.removeEventListener("mousemove", onMouseMove),
-        () => window.removeEventListener("mouseup", onMouseUp),
-        () => viewer.dispose(),
-      ];
+        const onMouseUp = () => { isMouseDown = false; };
+
+        vc.addEventListener("mousedown", onMouseDown);
+        vc.addEventListener("mousemove", onMouseMove);
+        window.addEventListener("mouseup", onMouseUp);
+
+        cleanupFns = [
+          () => { ro.disconnect(); },
+          () => vc.removeEventListener("mousedown", onMouseDown),
+          () => vc.removeEventListener("mousemove", onMouseMove),
+          () => window.removeEventListener("mouseup", onMouseUp),
+          () => {
+            if (container.contains(vc)) container.removeChild(vc);
+            canvasRef.current = null;
+            viewer.dispose();
+          },
+        ];
       } catch (err: any) {
         console.error("[SkinPainter3D] init failed:", err);
         setInitError(err?.message ?? String(err));
@@ -263,10 +264,10 @@ export function SkinPainter3D({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Reload skin when imageData OR bodyType changes
+  // Reload skin whenever imageData or bodyType changes from outside
   useEffect(() => {
     if (!viewerRef.current || !imageData) return;
-    reloadSkin(imageData, bodyType);  // bodyType passed directly — no ref lag
+    reloadSkin(imageData, bodyType);
   }, [imageData, bodyType, reloadSkin]);
 
   return (
@@ -290,10 +291,8 @@ export function SkinPainter3D({
           🖌️ Paint
         </button>
 
-        {/* Divider */}
         <div className="w-px h-4 bg-forge-border" />
 
-        {/* Outer layer toggle */}
         <button
           onClick={() => setShowOuterLayer((v) => !v)}
           title="Toggle outer layer (jacket / overlays)"
@@ -313,28 +312,25 @@ export function SkinPainter3D({
         )}
       </div>
 
-      {/* Canvas */}
+      {/* 3D canvas area — skinview3d appends its own canvas here */}
       <div
         ref={containerRef}
-        className="relative flex-1 bg-forge-bg overflow-hidden"
-        style={{ cursor: mode === "paint" ? "crosshair" : "grab" }}
+        className="relative flex-1 overflow-hidden"
+        style={{ cursor: mode === "paint" ? "crosshair" : "grab", background: "#1a1a2e" }}
       >
-        {/* Canvas fills the container; skinview3d owns its actual pixel dimensions */}
-        <canvas className="absolute inset-0 w-full h-full" />
-        {/* Init error overlay — only visible when skinview3d fails to load */}
         {initError && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-forge-bg/90 pointer-events-none p-4">
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-forge-bg/90 pointer-events-none p-4 z-10">
             <span className="text-red-400 font-semibold text-sm">3D viewer failed to load</span>
             <span className="text-forge-text-muted text-xs text-center max-w-xs">{initError}</span>
             <span className="text-forge-text-muted text-xs">Check the browser console (F12) for details</span>
           </div>
         )}
         {!imageData && !initError && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center text-forge-text-muted text-sm gap-2 pointer-events-none">
+          <div className="absolute inset-0 flex flex-col items-center justify-center text-forge-text-muted text-sm gap-2 pointer-events-none z-10">
             <span>Load a skin first, then paint here</span>
           </div>
         )}
-        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 text-xs text-forge-text-muted bg-forge-panel/90 backdrop-blur-sm px-4 py-2 rounded-full pointer-events-none border border-forge-border whitespace-nowrap">
+        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 text-xs text-white/60 bg-black/40 backdrop-blur-sm px-4 py-2 rounded-full pointer-events-none border border-white/10 whitespace-nowrap z-10">
           {mode === "paint" ? "🖌️ Click or drag on the model to paint" : "🖱️ Drag to rotate the model"}
         </div>
       </div>

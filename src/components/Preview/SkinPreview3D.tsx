@@ -52,18 +52,10 @@ export function SkinPreview3D({
     const canvas = document.createElement("canvas");
     canvas.width = 64; canvas.height = 64;
     canvas.getContext("2d")!.putImageData(skinData, 0, 0);
-    const dataUrl = canvas.toDataURL("image/png");
 
-    const isSlim = bt === "slim";
-
-    // Set slim directly on the player object — most reliable way
-    if (viewer.playerObject) {
-      viewer.playerObject.slim = isSlim;
-    }
-
-    viewer.loadSkin(dataUrl, {
-      model: isSlim ? "slim" : "default",
-    });
+    // loadSkin(source, model) — second arg is model type STRING not an options object.
+    // Passing a canvas element is synchronous (TextureSource path).
+    viewer.loadSkin(canvas, bt === "slim" ? "slim" : "default");
   }, []);
 
   // Build the viewer once on mount, then load skin if already available
