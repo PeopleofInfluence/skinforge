@@ -79,8 +79,8 @@ export function SkinPreview3D({
       const container = containerRef.current;
       const viewer = new skinview3d.SkinViewer({
         canvas: container.querySelector("canvas"),
-        width: container.clientWidth || 220,
-        height: container.clientHeight || 360,
+        width: 64,
+        height: 64,
       });
 
       if (viewer.controls) {
@@ -91,13 +91,32 @@ export function SkinPreview3D({
       viewer.autoRotateSpeed = 0.8;
       viewerRef.current = viewer;
 
+      // Size the viewer to its container and keep it in sync on resize
+      const updateSize = () => {
+        const c = containerRef.current;
+        const v = viewerRef.current;
+        if (!c || !v) return;
+        const w = c.clientWidth;
+        const h = c.clientHeight;
+        if (w > 0 && h > 0) v.setSize(w, h);
+      };
+      updateSize();
+      const ro = new ResizeObserver(updateSize);
+      ro.observe(container);
+      // ResizeObserver cleanup is handled by the outer return via dispose
+      // (viewer.dispose stops the render loop; we also disconnect ro)
+      viewer._roCleanup = () => ro.disconnect();
+
       // Load skin if it was already set before viewer finished initialising
       if (imageDataRef.current) {
         loadSkinToViewer(imageDataRef.current, bodyTypeRef.current);
       }
     })();
 
-    return () => { viewerRef.current?.dispose(); };
+    return () => {
+      viewerRef.current?._roCleanup?.();
+      viewerRef.current?.dispose();
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -135,9 +154,9 @@ export function SkinPreview3D({
     <div className="relative w-full h-full flex flex-col">
       <div
         ref={containerRef}
-        className="relative flex-1 flex items-center justify-center"
+        className="relative flex-1 overflow-hidden"
       >
-        <canvas className="rounded-lg" />
+        <canvas className="absolute inset-0 w-full h-full" />
         {!imageData && (
           <div className="absolute inset-0 flex flex-col items-center justify-center text-forge-text-muted text-sm gap-2 pointer-events-none">
             <SkinIcon />

@@ -161,15 +161,31 @@ export function SkinPainter3D({
       if (viewerRef.current) viewerRef.current.dispose();
 
       const container = containerRef.current;
+
+      // Use a small initial size — ResizeObserver sets the real dimensions right away
       const viewer = new (skinview3d as any).SkinViewer({
         canvas: container.querySelector("canvas"),
-        width: container.clientWidth || 420,
-        height: container.clientHeight || 520,
+        width: 64,
+        height: 64,
       });
 
       viewer.autoRotate = false;
       if (viewer.controls) viewer.controls.enabled = false;
       viewerRef.current = viewer;
+
+      // Size the viewer to the actual container, and keep it in sync on resize
+      const updateSize = () => {
+        const c = containerRef.current;
+        const v = viewerRef.current;
+        if (!c || !v) return;
+        const w = c.clientWidth;
+        const h = c.clientHeight;
+        if (w > 0 && h > 0) v.setSize(w, h);
+      };
+      updateSize();
+      const ro = new ResizeObserver(updateSize);
+      ro.observe(container);
+      cleanupFns.push(() => ro.disconnect());
 
       if (imageDataRef.current) {
         reloadSkin(imageDataRef.current, bodyTypeRef.current);
@@ -180,7 +196,8 @@ export function SkinPainter3D({
         rotY = Math.atan2(viewer.camera.position.x, viewer.camera.position.z);
       }
 
-      const vc = container.querySelector("canvas") as HTMLCanvasElement;
+      // Use viewer.canvas directly — more reliable than querySelector after init
+      const vc = (viewer.canvas ?? container.querySelector("canvas")) as HTMLCanvasElement;
       if (!vc) return;
 
       const onMouseDown = (e: MouseEvent) => {
@@ -293,10 +310,11 @@ export function SkinPainter3D({
       {/* Canvas */}
       <div
         ref={containerRef}
-        className="relative flex-1 flex items-center justify-center bg-forge-bg"
+        className="relative flex-1 bg-forge-bg overflow-hidden"
         style={{ cursor: mode === "paint" ? "crosshair" : "grab" }}
       >
-        <canvas className="rounded-xl" />
+        {/* Canvas fills the container; skinview3d owns its actual pixel dimensions */}
+        <canvas className="absolute inset-0 w-full h-full" />
         {!imageData && (
           <div className="absolute inset-0 flex flex-col items-center justify-center text-forge-text-muted text-sm gap-2 pointer-events-none">
             <span>Load a skin to start painting</span>
