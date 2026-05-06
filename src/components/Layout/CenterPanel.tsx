@@ -76,6 +76,7 @@ export function CenterPanel({
               <option value="idle">Idle</option>
               <option value="walk">Walk</option>
               <option value="run">Run</option>
+              <option value="fly">Fly</option>
             </select>
             <button
               onClick={() => setRotating(!rotating)}

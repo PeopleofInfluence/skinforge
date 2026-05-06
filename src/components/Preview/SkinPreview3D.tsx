@@ -124,6 +124,9 @@ export function SkinPreview3D({
       } else if (animation === "run") {
         sv3d.animation = new mod.RunningAnimation();
         sv3d.animation.speed = 1.2;
+      } else if (animation === "fly") {
+        sv3d.animation = new mod.FlyingAnimation();
+        sv3d.animation.speed = 0.6;
       }
     });
   }, [animation]);

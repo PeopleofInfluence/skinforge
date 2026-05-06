@@ -51,6 +51,8 @@ export interface EditorState {
   layers: Layer[];
   bodyType: BodyType;
   showGrid: boolean;
+  brushSize: number;
+  fillTolerance: number;
 }
 
 export interface HistoryEntry {
@@ -58,7 +60,7 @@ export interface HistoryEntry {
   description: string;
 }
 
-export type AnimationType = "idle" | "walk" | "run";
+export type AnimationType = "idle" | "walk" | "run" | "fly";
 
 export interface PreviewSettings {
   bodyType: BodyType;

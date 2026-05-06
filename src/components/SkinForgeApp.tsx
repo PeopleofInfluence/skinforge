@@ -35,6 +35,8 @@ export default function SkinForgeApp() {
     layers: INITIAL_LAYERS,
     bodyType: "classic",
     showGrid: true,
+    brushSize: 1,
+    fillTolerance: 0,
   });
 
   const [currentImageData, setCurrentImageData] = useState<ImageData | null>(null);
@@ -87,6 +89,8 @@ export default function SkinForgeApp() {
   const setTool = useCallback((tool: Tool) => setEditorState((s) => ({ ...s, tool })), []);
   const setColor = useCallback((color: string) => setEditorState((s) => ({ ...s, color })), []);
   const setLayer = useCallback((activeLayer: LayerName) => setEditorState((s) => ({ ...s, activeLayer })), []);
+  const setBrushSize = useCallback((brushSize: number) => setEditorState((s) => ({ ...s, brushSize })), []);
+  const setFillTolerance = useCallback((fillTolerance: number) => setEditorState((s) => ({ ...s, fillTolerance })), []);
   const toggleLayerVisibility = useCallback((name: LayerName) => {
     setEditorState((s) => ({ ...s, layers: s.layers.map((l) => l.name === name ? { ...l, visible: !l.visible } : l) }));
   }, []);
@@ -159,6 +163,8 @@ export default function SkinForgeApp() {
           onClear={handleClear}
           onExport={handleExport}
           onFixDarkSides={handleFixDarkSides}
+          onBrushSizeChange={setBrushSize}
+          onFillToleranceChange={setFillTolerance}
         />
         <CenterPanel
           editorState={editorState}

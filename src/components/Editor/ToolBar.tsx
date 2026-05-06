@@ -5,6 +5,10 @@ import type { Tool } from "@/types";
 interface ToolBarProps {
   activeTool: Tool;
   onSelectTool: (tool: Tool) => void;
+  brushSize: number;
+  onBrushSizeChange: (size: number) => void;
+  fillTolerance: number;
+  onFillToleranceChange: (t: number) => void;
   zoom: number;
   onZoomIn: () => void;
   onZoomOut: () => void;
@@ -28,9 +32,15 @@ const TOOLS: { id: Tool; label: string; icon: React.ReactNode }[] = [
   { id: "darken", label: "Darken (D)", icon: <DarkenIcon /> },
 ];
 
+const BRUSH_TOOLS: Tool[] = ["pencil", "eraser", "brighten", "darken"];
+
 export function ToolBar({
   activeTool,
   onSelectTool,
+  brushSize,
+  onBrushSizeChange,
+  fillTolerance,
+  onFillToleranceChange,
   zoom,
   onZoomIn,
   onZoomOut,
@@ -64,6 +74,49 @@ export function ToolBar({
           </button>
         ))}
       </div>
+
+      {/* Brush size — only shown for stroke tools */}
+      {BRUSH_TOOLS.includes(activeTool) && (
+        <div className="mt-1">
+          <span className="text-xs text-forge-text-muted px-1">Size</span>
+          <div className="flex gap-0.5 mt-0.5">
+            {[1, 2, 3, 4].map((s) => (
+              <button
+                key={s}
+                onClick={() => onBrushSizeChange(s)}
+                title={`Brush size ${s}px`}
+                className={`flex-1 py-1 rounded text-xs font-bold transition-colors ${
+                  brushSize === s
+                    ? "bg-forge-accent text-white"
+                    : "bg-forge-border text-forge-text-muted hover:text-forge-text"
+                }`}
+              >
+                {s}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Fill tolerance — only shown for fill tool */}
+      {activeTool === "fill" && (
+        <div className="mt-1 px-1">
+          <div className="flex items-center justify-between mb-0.5">
+            <span className="text-xs text-forge-text-muted">Tolerance</span>
+            <span className="text-xs text-forge-text-muted">{fillTolerance}</span>
+          </div>
+          <input
+            type="range"
+            min={0}
+            max={80}
+            step={5}
+            value={fillTolerance}
+            onChange={(e) => onFillToleranceChange(Number(e.target.value))}
+            className="w-full accent-forge-accent h-1"
+            title="Fill tolerance — higher = match more colours"
+          />
+        </div>
+      )}
 
       <div className="border-t border-forge-border my-1" />
 

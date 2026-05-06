@@ -118,32 +118,44 @@ export function usePixelEditor({
   );
 
   const paintPixel = useCallback(
-    (data: ImageData, x: number, y: number, tool: Tool, color: string): ImageData => {
+    (data: ImageData, x: number, y: number, tool: Tool, color: string, brushSize: number): ImageData => {
       const newData = cloneImageData(data);
-      const idx = (y * SKIN_WIDTH + x) * 4;
+      const [r, g, b, a] = hexToRgba(color);
 
-      if (tool === "eraser") {
-        newData.data[idx] = 0;
-        newData.data[idx + 1] = 0;
-        newData.data[idx + 2] = 0;
-        newData.data[idx + 3] = 0;
-      } else if (tool === "pencil") {
-        const [r, g, b, a] = hexToRgba(color);
-        newData.data[idx] = r;
-        newData.data[idx + 1] = g;
-        newData.data[idx + 2] = b;
-        newData.data[idx + 3] = a;
-      } else if (tool === "brighten") {
-        if (newData.data[idx + 3] > 0) {
-          newData.data[idx]     = Math.min(255, Math.round(newData.data[idx] * 1.25));
-          newData.data[idx + 1] = Math.min(255, Math.round(newData.data[idx + 1] * 1.25));
-          newData.data[idx + 2] = Math.min(255, Math.round(newData.data[idx + 2] * 1.25));
-        }
-      } else if (tool === "darken") {
-        if (newData.data[idx + 3] > 0) {
-          newData.data[idx]     = Math.round(newData.data[idx] * 0.75);
-          newData.data[idx + 1] = Math.round(newData.data[idx + 1] * 0.75);
-          newData.data[idx + 2] = Math.round(newData.data[idx + 2] * 0.75);
+      // Paint a square of brushSize × brushSize pixels, offset so cursor is top-left corner
+      // (matches Photoshop / most editors: brush grows down-right from cursor for even sizes,
+      //  centred for odd sizes)
+      const half = Math.floor((brushSize - 1) / 2);
+      for (let dy = -half; dy < brushSize - half; dy++) {
+        for (let dx = -half; dx < brushSize - half; dx++) {
+          const px = x + dx;
+          const py = y + dy;
+          if (px < 0 || px >= SKIN_WIDTH || py < 0 || py >= SKIN_HEIGHT) continue;
+          const idx = (py * SKIN_WIDTH + px) * 4;
+
+          if (tool === "eraser") {
+            newData.data[idx] = 0;
+            newData.data[idx + 1] = 0;
+            newData.data[idx + 2] = 0;
+            newData.data[idx + 3] = 0;
+          } else if (tool === "pencil") {
+            newData.data[idx] = r;
+            newData.data[idx + 1] = g;
+            newData.data[idx + 2] = b;
+            newData.data[idx + 3] = a;
+          } else if (tool === "brighten") {
+            if (newData.data[idx + 3] > 0) {
+              newData.data[idx]     = Math.min(255, Math.round(newData.data[idx] * 1.25));
+              newData.data[idx + 1] = Math.min(255, Math.round(newData.data[idx + 1] * 1.25));
+              newData.data[idx + 2] = Math.min(255, Math.round(newData.data[idx + 2] * 1.25));
+            }
+          } else if (tool === "darken") {
+            if (newData.data[idx + 3] > 0) {
+              newData.data[idx]     = Math.round(newData.data[idx] * 0.75);
+              newData.data[idx + 1] = Math.round(newData.data[idx + 1] * 0.75);
+              newData.data[idx + 2] = Math.round(newData.data[idx + 2] * 0.75);
+            }
+          }
         }
       }
       return newData;
@@ -174,7 +186,12 @@ export function usePixelEditor({
       if (tool === "fill") {
         commitHistory();
         const [r, g, b, a] = hexToRgba(color);
-        const filled = floodFill(imageDataRef.current, pos.x, pos.y, [r, g, b, a]);
+        const filled = floodFill(
+          imageDataRef.current,
+          pos.x, pos.y,
+          [r, g, b, a],
+          editorStateRef.current.fillTolerance
+        );
         setImageData(filled);
         onPixelsChangeRef.current?.(filled);
         return;
@@ -184,7 +201,7 @@ export function usePixelEditor({
       commitHistory();
       isDrawing.current = true;
       lastPos.current = pos;
-      const updated = paintPixel(imageDataRef.current, pos.x, pos.y, tool, color);
+      const updated = paintPixel(imageDataRef.current, pos.x, pos.y, tool, color, editorStateRef.current.brushSize);
       setImageData(updated);
       onPixelsChangeRef.current?.(updated);
     },
@@ -211,10 +228,11 @@ export function usePixelEditor({
         const steps = Math.max(Math.abs(dx), Math.abs(dy), 1);
 
         let current = imageDataRef.current;
+        const bs = editorStateRef.current.brushSize;
         for (let i = 0; i <= steps; i++) {
           const ix = Math.round(last.x + (dx * i) / steps);
           const iy = Math.round(last.y + (dy * i) / steps);
-          current = paintPixel(current, ix, iy, tool, color);
+          current = paintPixel(current, ix, iy, tool, color, bs);
         }
         lastPos.current = pos;
         setImageData(current);

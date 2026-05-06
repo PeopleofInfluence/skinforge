@@ -22,6 +22,8 @@ interface LeftPanelProps {
   onClear: () => void;
   onExport: () => void;
   onFixDarkSides: () => void;
+  onBrushSizeChange: (size: number) => void;
+  onFillToleranceChange: (t: number) => void;
 }
 
 type Tab = "tools" | "colour" | "layers";
@@ -42,6 +44,8 @@ export function LeftPanel({
   onClear,
   onExport,
   onFixDarkSides,
+  onBrushSizeChange,
+  onFillToleranceChange,
 }: LeftPanelProps) {
   const [tab, setTab] = useState<Tab>("tools");
 
@@ -76,6 +80,10 @@ export function LeftPanel({
           <ToolBar
             activeTool={editorState.tool}
             onSelectTool={onToolChange}
+            brushSize={editorState.brushSize}
+            onBrushSizeChange={onBrushSizeChange}
+            fillTolerance={editorState.fillTolerance}
+            onFillToleranceChange={onFillToleranceChange}
             zoom={editorState.zoom}
             onZoomIn={onZoomIn}
             onZoomOut={onZoomOut}

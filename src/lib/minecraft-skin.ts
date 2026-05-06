@@ -275,12 +275,15 @@ export function stripOuterLayer(src: ImageData): ImageData {
   return copy;
 }
 
-/** Flood fill algorithm for the paint bucket tool */
+/** Flood fill algorithm for the paint bucket tool.
+ *  tolerance 0 = exact match only; 1–100 = allow colour distance up to that value.
+ */
 export function floodFill(
   imageData: ImageData,
   startX: number,
   startY: number,
-  fillColor: [number, number, number, number]
+  fillColor: [number, number, number, number],
+  tolerance = 0
 ): ImageData {
   const data = new Uint8ClampedArray(imageData.data);
   const width = imageData.width;
@@ -299,10 +302,22 @@ export function floodFill(
     targetColor[0] === fillColor[0] &&
     targetColor[1] === fillColor[1] &&
     targetColor[2] === fillColor[2] &&
-    targetColor[3] === fillColor[3]
+    targetColor[3] === fillColor[3] &&
+    tolerance === 0
   ) {
     return imageData;
   }
+
+  // Max possible channel distance is sqrt(255²*3 + 255²) ≈ 510; map tolerance 0-100 → 0-255
+  const maxDist = (tolerance / 100) * 255;
+
+  const colorsMatch = (idx: number): boolean => {
+    const dr = data[idx]     - targetColor[0];
+    const dg = data[idx + 1] - targetColor[1];
+    const db = data[idx + 2] - targetColor[2];
+    const da = data[idx + 3] - targetColor[3];
+    return Math.sqrt(dr * dr + dg * dg + db * db + da * da) <= maxDist;
+  };
 
   const stack: [number, number][] = [[startX, startY]];
   const visited = new Set<number>();
@@ -316,14 +331,7 @@ export function floodFill(
     visited.add(key);
 
     const idx = key * 4;
-    if (
-      data[idx] !== targetColor[0] ||
-      data[idx + 1] !== targetColor[1] ||
-      data[idx + 2] !== targetColor[2] ||
-      data[idx + 3] !== targetColor[3]
-    ) {
-      continue;
-    }
+    if (!colorsMatch(idx)) continue;
 
     data[idx] = fillColor[0];
     data[idx + 1] = fillColor[1];
