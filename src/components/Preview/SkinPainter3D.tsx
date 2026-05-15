@@ -111,20 +111,29 @@ export function SkinPainter3D({
     const viewer = viewerRef.current;
     const THREE = threeRef.current;
     const vc = canvasRef.current;
-    if (!viewer || !THREE || !vc) return;
+    if (!viewer || !THREE || !vc) {
+      console.warn('[Paint] guard failed — viewer:', !!viewer, 'THREE:', !!THREE, 'canvas:', !!vc);
+      return;
+    }
 
     const rect = vc.getBoundingClientRect();
     const mx = ((event.clientX - rect.left) / rect.width) * 2 - 1;
     const my = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+    console.log('[Paint] NDC:', mx.toFixed(3), my.toFixed(3), '| rect:', rect.left.toFixed(0), rect.top.toFixed(0), rect.width.toFixed(0), rect.height.toFixed(0));
+
+    // Ensure world matrices are current before raycasting
+    viewer.playerObject?.updateMatrixWorld(true);
 
     const raycaster = new THREE.Raycaster();
     raycaster.setFromCamera(new THREE.Vector2(mx, my), viewer.camera);
 
     // Intersect against the whole player hierarchy (recursive)
     const hits = raycaster.intersectObjects([viewer.playerObject], true);
+    console.log('[Paint] hits:', hits.length, hits.map((h: any) => h.object?.name ?? h.object?.type));
 
     for (const hit of hits) {
       if (hit.uv) {
+        console.log('[Paint] UV hit:', hit.uv.x.toFixed(3), hit.uv.y.toFixed(3));
         paintAtUV(hit.uv.x, hit.uv.y, bt);
         break;
       }
@@ -143,10 +152,17 @@ export function SkinPainter3D({
 
     (async () => {
       try {
-        const [skinview3d, THREE] = await Promise.all([
+        const [skinview3d, threeModule] = await Promise.all([
           import("skinview3d"),
           import("three"),
         ]);
+
+        // Dynamic import returns either ESM named-exports or a CJS default bundle.
+        // Handle both shapes so new THREE.Raycaster() always works.
+        const THREE: any = ('Raycaster' in threeModule)
+          ? threeModule
+          : (threeModule as any).default;
+        console.log('[SkinPainter3D] THREE loaded — Raycaster:', typeof THREE?.Raycaster, '| Vector2:', typeof THREE?.Vector2);
 
         threeRef.current = THREE;
         if (!containerRef.current) return;
@@ -206,6 +222,7 @@ export function SkinPainter3D({
           isMouseDown = true;
           lastX = e.clientX;
           lastY = e.clientY;
+          console.log('[Paint] mousedown mode:', modeRef.current, 'at', e.clientX, e.clientY);
           if (modeRef.current === "paint") {
             e.preventDefault();
             raycastAndPaint(e, bodyTypeRef.current);
