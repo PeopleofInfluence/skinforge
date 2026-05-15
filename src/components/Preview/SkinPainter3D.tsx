@@ -12,6 +12,99 @@ interface SkinPainter3DProps {
   onPixelsPaint: (imageData: ImageData) => void;
 }
 
+// ---------------------------------------------------------------------------
+// Pure-JS ray helpers — no Three.js import needed
+// These work on any object with {x,y,z} properties, which THREE.Vector3 has.
+// ---------------------------------------------------------------------------
+
+function dot(a: any, b: any) { return a.x * b.x + a.y * b.y + a.z * b.z; }
+function cross(a: any, b: any) {
+  return { x: a.y * b.z - a.z * b.y, y: a.z * b.x - a.x * b.z, z: a.x * b.y - a.y * b.x };
+}
+
+/**
+ * Möller–Trumbore ray-triangle intersection.
+ * Returns { t, baryU, baryV } or null.
+ */
+function rayTriangle(
+  ro: any, rd: any,
+  v0: any, v1: any, v2: any,
+): { t: number; baryU: number; baryV: number } | null {
+  const EPSILON = 1e-8;
+  const e1 = { x: v1.x - v0.x, y: v1.y - v0.y, z: v1.z - v0.z };
+  const e2 = { x: v2.x - v0.x, y: v2.y - v0.y, z: v2.z - v0.z };
+  const h = cross(rd, e2);
+  const a = dot(e1, h);
+  if (Math.abs(a) < EPSILON) return null;
+  const f = 1 / a;
+  const s = { x: ro.x - v0.x, y: ro.y - v0.y, z: ro.z - v0.z };
+  const baryU = f * dot(s, h);
+  if (baryU < 0 || baryU > 1) return null;
+  const q = cross(s, e1);
+  const baryV = f * dot(rd, q);
+  if (baryV < 0 || baryU + baryV > 1) return null;
+  const t = f * dot(e2, q);
+  return t > EPSILON ? { t, baryU, baryV } : null;
+}
+
+/**
+ * Intersect a world-space ray (origin + direction) against one Three.js Mesh.
+ * Returns the closest UV hit or null.
+ *
+ * Uses only BufferAttribute.getX/Y/Z methods + existing Vector3/Matrix4 methods
+ * on the mesh's own objects — no separate Three.js import required.
+ */
+function intersectMesh(
+  mesh: any,
+  worldOrigin: any,   // THREE.Vector3 (from viewer's THREE)
+  worldDir: any,      // THREE.Vector3 (from viewer's THREE)
+): { t: number; u: number; v: number } | null {
+  const geo = mesh.geometry;
+  if (!geo) return null;
+
+  const posAttr = geo.attributes.position;
+  const uvAttr  = geo.attributes.uv;
+  if (!posAttr || !uvAttr) return null;
+
+  // Transform ray to local (object) space using Three.js Matrix4 methods
+  // on the mesh's own matrixWorld — same THREE instance, no import needed.
+  const invMat = mesh.matrixWorld.clone().invert();
+  const lo = worldOrigin.clone().applyMatrix4(invMat);
+  const ld = worldDir.clone().transformDirection(invMat);
+
+  const idx = geo.index;
+  const triCount = idx ? idx.count / 3 : posAttr.count / 3;
+
+  let bestT = Infinity;
+  let bestU = 0, bestV_tex = 0;
+  let found = false;
+
+  for (let tri = 0; tri < triCount; tri++) {
+    const i0 = idx ? idx.getX(tri * 3)     : tri * 3;
+    const i1 = idx ? idx.getX(tri * 3 + 1) : tri * 3 + 1;
+    const i2 = idx ? idx.getX(tri * 3 + 2) : tri * 3 + 2;
+
+    const v0 = { x: posAttr.getX(i0), y: posAttr.getY(i0), z: posAttr.getZ(i0) };
+    const v1 = { x: posAttr.getX(i1), y: posAttr.getY(i1), z: posAttr.getZ(i1) };
+    const v2 = { x: posAttr.getX(i2), y: posAttr.getY(i2), z: posAttr.getZ(i2) };
+
+    const hit = rayTriangle(lo, ld, v0, v1, v2);
+    if (!hit || hit.t >= bestT) continue;
+
+    bestT = hit.t;
+
+    // Barycentric interpolation of UV attribute
+    const baryW = 1 - hit.baryU - hit.baryV;
+    bestU     = baryW * uvAttr.getX(i0) + hit.baryU * uvAttr.getX(i1) + hit.baryV * uvAttr.getX(i2);
+    bestV_tex = baryW * uvAttr.getY(i0) + hit.baryU * uvAttr.getY(i1) + hit.baryV * uvAttr.getY(i2);
+    found = true;
+  }
+
+  return found ? { t: bestT, u: bestU, v: bestV_tex } : null;
+}
+
+// ---------------------------------------------------------------------------
+
 export function SkinPainter3D({
   imageData,
   bodyType,
@@ -20,19 +113,18 @@ export function SkinPainter3D({
   onPixelsPaint,
 }: SkinPainter3DProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const viewerRef = useRef<any>(null);
-  const threeRef = useRef<any>(null);
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const viewerRef    = useRef<any>(null);
+  const canvasRef    = useRef<HTMLCanvasElement | null>(null);
   const [mode, setMode] = useState<"paint" | "rotate">("paint");
   const [showOuterLayer, setShowOuterLayer] = useState(false);
   const showOuterLayerRef = useRef(false);
   const [initError, setInitError] = useState<string | null>(null);
 
-  const imageDataRef = useRef<ImageData | null>(imageData);
-  const colorRef = useRef(color);
-  const brushSizeRef = useRef(brushSize);
-  const bodyTypeRef = useRef<BodyType>(bodyType);
-  const modeRef = useRef<"paint" | "rotate">("paint");
+  const imageDataRef  = useRef<ImageData | null>(imageData);
+  const colorRef      = useRef(color);
+  const brushSizeRef  = useRef(brushSize);
+  const bodyTypeRef   = useRef<BodyType>(bodyType);
+  const modeRef       = useRef<"paint" | "rotate">("paint");
 
   useEffect(() => { imageDataRef.current = imageData; }, [imageData]);
   useEffect(() => { colorRef.current = color; }, [color]);
@@ -53,25 +145,13 @@ export function SkinPainter3D({
       : { r: 0, g: 0, b: 0 };
   };
 
-  /**
-   * Load the current skin ImageData into the viewer.
-   * IMPORTANT: loadSkin(source, model) — second arg is a model type STRING
-   * ("slim" | "default" | "auto-detect"), NOT an options object.
-   * playerObject.skin.modelType is the correct way to change arm width.
-   */
   const reloadSkin = useCallback((data: ImageData, bt: BodyType) => {
     if (!viewerRef.current) return;
-
     const skinData = showOuterLayerRef.current ? data : stripOuterLayer(data);
     const c = document.createElement("canvas");
     c.width = 64; c.height = 64;
     c.getContext("2d")!.putImageData(skinData, 0, 0);
-
-    const modelType = bt === "slim" ? "slim" : "default";
-
-    // Pass canvas element directly (synchronous TextureSource path)
-    // and the model type string as the second argument — NOT an options object.
-    viewerRef.current.loadSkin(c, modelType);
+    viewerRef.current.loadSkin(c, bt === "slim" ? "slim" : "default");
   }, []);
 
   const paintAtUV = useCallback((u: number, v: number, bt: BodyType) => {
@@ -81,63 +161,76 @@ export function SkinPainter3D({
     const copy = new ImageData(
       new Uint8ClampedArray(current.data),
       current.width,
-      current.height
+      current.height,
     );
-
     const { r, g, b } = hexToRgb(colorRef.current);
-    const cx = Math.min(63, Math.floor(u * 64));
-    const cy = Math.min(63, Math.floor((1 - v) * 64));
-    const bs = brushSizeRef.current;
+    const cx   = Math.min(63, Math.floor(u * 64));
+    const cy   = Math.min(63, Math.floor((1 - v) * 64));
+    const bs   = brushSizeRef.current;
     const half = Math.floor((bs - 1) / 2);
 
     for (let dy = -half; dy < bs - half; dy++) {
       for (let dx = -half; dx < bs - half; dx++) {
-        const px = Math.max(0, Math.min(63, cx + dx));
-        const py = Math.max(0, Math.min(63, cy + dy));
+        const px  = Math.max(0, Math.min(63, cx + dx));
+        const py  = Math.max(0, Math.min(63, cy + dy));
         const idx = (py * 64 + px) * 4;
-        copy.data[idx] = r;
+        copy.data[idx]     = r;
         copy.data[idx + 1] = g;
         copy.data[idx + 2] = b;
         copy.data[idx + 3] = 255;
       }
     }
-
     imageDataRef.current = copy;
     onPixelsPaint(copy);
     reloadSkin(copy, bt);
   }, [onPixelsPaint, reloadSkin]);
 
+  /**
+   * Raycast against the player model using pure-JS triangle intersection.
+   * No separate Three.js import — uses only methods on the viewer's own objects.
+   */
   const raycastAndPaint = useCallback((event: MouseEvent, bt: BodyType) => {
     const viewer = viewerRef.current;
-    const THREE = threeRef.current;
-    const vc = canvasRef.current;
-    if (!viewer || !THREE || !vc) {
-      console.warn('[Paint] guard failed — viewer:', !!viewer, 'THREE:', !!THREE, 'canvas:', !!vc);
-      return;
-    }
+    const vc     = canvasRef.current;
+    if (!viewer || !vc) return;
 
+    const camera      = viewer.camera;
+    const playerObject = viewer.playerObject;
+    if (!camera || !playerObject) return;
+
+    // NDC coordinates from click position
     const rect = vc.getBoundingClientRect();
-    const mx = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-    const my = -((event.clientY - rect.top) / rect.height) * 2 + 1;
-    console.log('[Paint] NDC:', mx.toFixed(3), my.toFixed(3), '| rect:', rect.left.toFixed(0), rect.top.toFixed(0), rect.width.toFixed(0), rect.height.toFixed(0));
+    const ndcX =  ((event.clientX - rect.left) / rect.width)  * 2 - 1;
+    const ndcY = -((event.clientY - rect.top)  / rect.height) * 2 + 1;
 
-    // Ensure world matrices are current before raycasting
-    viewer.playerObject?.updateMatrixWorld(true);
+    // Build a world-space ray using the camera's own Three.js methods.
+    // camera.position is a THREE.Vector3 from skinview3d's bundled THREE.
+    // Calling .clone()/.set()/.unproject()/.sub()/.normalize() on it uses
+    // that same Three.js instance — no separate import, no instanceof issues.
+    camera.updateProjectionMatrix();
+    playerObject.updateMatrixWorld(true);
 
-    const raycaster = new THREE.Raycaster();
-    raycaster.setFromCamera(new THREE.Vector2(mx, my), viewer.camera);
+    const origin    = camera.position.clone();                          // world origin
+    const direction = camera.position.clone()
+      .set(ndcX, ndcY, 0.5)
+      .unproject(camera)   // NDC → world
+      .sub(origin)
+      .normalize();        // world direction
 
-    // Intersect against the whole player hierarchy (recursive)
-    const hits = raycaster.intersectObjects([viewer.playerObject], true);
-    console.log('[Paint] hits:', hits.length, hits.map((h: any) => h.object?.name ?? h.object?.type));
+    // Walk every mesh in the player hierarchy and find the closest triangle hit
+    let bestT  = Infinity;
+    let bestUV: { u: number; v: number } | null = null;
 
-    for (const hit of hits) {
-      if (hit.uv) {
-        console.log('[Paint] UV hit:', hit.uv.x.toFixed(3), hit.uv.y.toFixed(3));
-        paintAtUV(hit.uv.x, hit.uv.y, bt);
-        break;
+    playerObject.traverse((obj: any) => {
+      if (!obj.isMesh) return;
+      const hit = intersectMesh(obj, origin, direction);
+      if (hit && hit.t < bestT) {
+        bestT  = hit.t;
+        bestUV = { u: hit.u, v: hit.v };
       }
-    }
+    });
+
+    if (bestUV) paintAtUV(bestUV.u, bestUV.v, bt);
   }, [paintAtUV]);
 
   // Build viewer once on mount
@@ -145,26 +238,13 @@ export function SkinPainter3D({
     if (!containerRef.current) return;
     let cleanupFns: (() => void)[] = [];
     let isMouseDown = false;
-    let lastX = 0;
-    let lastY = 0;
-    let rotY = 0;
-    let rotX = 0;
+    let lastX = 0, lastY = 0;
+    let rotY = 0, rotX = 0;
 
     (async () => {
       try {
-        const [skinview3d, threeModule] = await Promise.all([
-          import("skinview3d"),
-          import("three"),
-        ]);
+        const skinview3d = await import("skinview3d");
 
-        // Dynamic import returns either ESM named-exports or a CJS default bundle.
-        // Handle both shapes so new THREE.Raycaster() always works.
-        const THREE: any = ('Raycaster' in threeModule)
-          ? threeModule
-          : (threeModule as any).default;
-        console.log('[SkinPainter3D] THREE loaded — Raycaster:', typeof THREE?.Raycaster, '| Vector2:', typeof THREE?.Vector2);
-
-        threeRef.current = THREE;
         if (!containerRef.current) return;
         if (viewerRef.current) viewerRef.current.dispose();
 
@@ -172,37 +252,31 @@ export function SkinPainter3D({
         const w = Math.max(container.clientWidth, 100);
         const h = Math.max(container.clientHeight, 100);
 
-        // Do NOT pass a canvas — let skinview3d create its own.
-        // This avoids all "wrong canvas element" confusion.
         const viewer = new (skinview3d as any).SkinViewer({
           width: w,
           height: h,
-          // Set a visible background so the model is always visible
-          // even when the skin has transparent pixels.
           background: 0x1a1a2e,
         });
 
         viewer.autoRotate = false;
-        // Disable OrbitControls — we handle mouse ourselves
         if (viewer.controls) viewer.controls.enabled = false;
         viewerRef.current = viewer;
 
-        // Append skinview3d's canvas to our container and style it to fill
+        // Append skinview3d's own canvas (it manages its own WebGL context)
         const vc = viewer.canvas as HTMLCanvasElement;
         canvasRef.current = vc;
         vc.style.position = "absolute";
-        vc.style.inset = "0";
-        vc.style.width = "100%";
-        vc.style.height = "100%";
+        vc.style.inset     = "0";
+        vc.style.width     = "100%";
+        vc.style.height    = "100%";
         container.appendChild(vc);
 
-        // Keep viewer sized to container (handles window resize etc.)
+        // Keep viewer sized to its container
         const updateSize = () => {
           const c = containerRef.current;
           const v = viewerRef.current;
           if (!c || !v) return;
-          const cw = c.clientWidth;
-          const ch = c.clientHeight;
+          const cw = c.clientWidth, ch = c.clientHeight;
           if (cw > 0 && ch > 0) v.setSize(cw, ch);
         };
         const ro = new ResizeObserver(updateSize);
@@ -213,16 +287,14 @@ export function SkinPainter3D({
           reloadSkin(imageDataRef.current, bodyTypeRef.current);
         }
 
-        // Capture initial camera angle for smooth rotation
         if (viewer.camera) {
           rotY = Math.atan2(viewer.camera.position.x, viewer.camera.position.z);
         }
 
+        // Mouse handlers
         const onMouseDown = (e: MouseEvent) => {
           isMouseDown = true;
-          lastX = e.clientX;
-          lastY = e.clientY;
-          console.log('[Paint] mousedown mode:', modeRef.current, 'at', e.clientX, e.clientY);
+          lastX = e.clientX; lastY = e.clientY;
           if (modeRef.current === "paint") {
             e.preventDefault();
             raycastAndPaint(e, bodyTypeRef.current);
@@ -234,9 +306,7 @@ export function SkinPainter3D({
           if (modeRef.current === "rotate") {
             const dx = e.clientX - lastX;
             const dy = e.clientY - lastY;
-            lastX = e.clientX;
-            lastY = e.clientY;
-
+            lastX = e.clientX; lastY = e.clientY;
             const cam = viewer.camera;
             if (cam) {
               rotY -= dx * 0.01;
@@ -248,7 +318,7 @@ export function SkinPainter3D({
               cam.position.y = rotX * 40;
               cam.lookAt(0, 0, 0);
             }
-          } else if (modeRef.current === "paint") {
+          } else {
             e.preventDefault();
             raycastAndPaint(e, bodyTypeRef.current);
           }
@@ -261,7 +331,7 @@ export function SkinPainter3D({
         window.addEventListener("mouseup", onMouseUp);
 
         cleanupFns = [
-          () => { ro.disconnect(); },
+          () => ro.disconnect(),
           () => vc.removeEventListener("mousedown", onMouseDown),
           () => vc.removeEventListener("mousemove", onMouseMove),
           () => window.removeEventListener("mouseup", onMouseUp),
@@ -329,7 +399,7 @@ export function SkinPainter3D({
         )}
       </div>
 
-      {/* 3D canvas area — skinview3d appends its own canvas here */}
+      {/* 3D canvas area */}
       <div
         ref={containerRef}
         className="relative flex-1 overflow-hidden"
