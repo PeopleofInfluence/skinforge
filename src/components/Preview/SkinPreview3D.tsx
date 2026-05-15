@@ -20,8 +20,8 @@ export function SkinPreview3D({
 }: SkinPreview3DProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<any>(null);
-  const [showOuter, setShowOuter] = useState(false);
-  const showOuterRef = useRef(false);
+  const [showOuter, setShowOuter] = useState(true);
+  const showOuterRef = useRef(true);
 
   // Keep refs so async callbacks always read the latest values
   const imageDataRef = useRef<ImageData | null>(imageData);
@@ -127,17 +127,14 @@ export function SkinPreview3D({
   useEffect(() => {
     if (!viewerRef.current) return;
     const sv3d = viewerRef.current;
-    sv3d.animation = null;
+    // skinview3d 2.x animations are plain arrow functions (player, time) => void.
+    // They are NOT constructors — assign them directly, never use `new`.
     import("skinview3d").then((mod: any) => {
-      if (animation === "walk") {
-        sv3d.animation = new mod.WalkingAnimation();
-        sv3d.animation.speed = 0.8;
-      } else if (animation === "run") {
-        sv3d.animation = new mod.RunningAnimation();
-        sv3d.animation.speed = 1.2;
-      } else if (animation === "fly") {
-        sv3d.animation = new mod.FlyingAnimation();
-        sv3d.animation.speed = 0.6;
+      switch (animation) {
+        case "walk": sv3d.animation = mod.WalkingAnimation; break;
+        case "run":  sv3d.animation = mod.RunningAnimation; break;
+        case "fly":  sv3d.animation = mod.FlyingAnimation;  break;
+        default:     sv3d.animation = mod.IdleAnimation;    break;
       }
     });
   }, [animation]);
