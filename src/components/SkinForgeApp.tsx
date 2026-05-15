@@ -49,6 +49,13 @@ export default function SkinForgeApp() {
   const undoFnRef = useRef<(() => void) | null>(null);
   const redoFnRef = useRef<(() => void) | null>(null);
 
+  // App-level undo/redo stack — captures changes that come from 3D paint or
+  // external operations (Fix Dark Sides, etc.) that bypass the 2D editor's
+  // own history.  The 2D editor manages its own stack for pixel-editor actions;
+  // this stack is only used when the 2D editor has nothing to undo.
+  const appUndoStack = useRef<ImageData[]>([]);
+  const appRedoStack = useRef<ImageData[]>([]);
+
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setUser(data.user ?? null));
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -101,15 +108,57 @@ export default function SkinForgeApp() {
 
   const handleUndoStateChange = useCallback((u: boolean, r: boolean) => { setCanUndo(u); setCanRedo(r); }, []);
   const handleColorPick = useCallback((color: string) => { setColor(color); setTool("pencil"); }, [setColor, setTool]);
-  const handlePixelsChange = useCallback((imageData: ImageData) => { setCurrentImageData(imageData); }, []);
-  const handleSkinGenerated = useCallback((imageData: ImageData) => { setExternalImageData(imageData); setCurrentImageData(imageData); }, []);
-  const handleClear = useCallback(() => { const blank = createBlankSkin(); setExternalImageData(blank); setCurrentImageData(blank); }, []);
+
+  // Push to app-level history (used by 3D paint + external ops).
+  // We clone so history entries are immutable snapshots.
+  const pushAppHistory = useCallback((prev: ImageData) => {
+    appUndoStack.current.push(new ImageData(new Uint8ClampedArray(prev.data), prev.width, prev.height));
+    if (appUndoStack.current.length > 50) appUndoStack.current.shift();
+    appRedoStack.current = [];
+    setCanUndo(true);
+    setCanRedo(false);
+  }, []);
+
+  // Called by the 2D pixel editor on every stroke
+  const handlePixelsChange = useCallback((imageData: ImageData) => {
+    setCurrentImageData(imageData);
+    // 2D editor manages its own history — clear app-level stacks so both
+    // stacks don't fight each other.
+    appUndoStack.current = [];
+    appRedoStack.current = [];
+  }, []);
+
+  // Called by 3D painter after each paint operation
+  const handlePixelsPaint = useCallback((imageData: ImageData) => {
+    setCurrentImageData((prev) => {
+      if (prev) pushAppHistory(prev);
+      return imageData;
+    });
+    setCanUndo(true);
+  }, [pushAppHistory]);
+
+  const handleSkinGenerated = useCallback((imageData: ImageData) => {
+    setExternalImageData(imageData);
+    setCurrentImageData(imageData);
+    appUndoStack.current = [];
+    appRedoStack.current = [];
+  }, []);
+
+  const handleClear = useCallback(() => {
+    const blank = createBlankSkin();
+    setExternalImageData(blank);
+    setCurrentImageData(blank);
+    appUndoStack.current = [];
+    appRedoStack.current = [];
+  }, []);
+
   const handleFixDarkSides = useCallback(() => {
     if (!currentImageData) return;
+    pushAppHistory(currentImageData);
     const fixed = fixAISkinBlackSides(currentImageData);
     setExternalImageData(fixed);
     setCurrentImageData(fixed);
-  }, [currentImageData]);
+  }, [currentImageData, pushAppHistory]);
 
   const handleExport = useCallback(() => {
     if (!currentImageData) return;
@@ -123,8 +172,55 @@ export default function SkinForgeApp() {
     link.click();
   }, [currentImageData]);
 
-  const handleUndo = useCallback(() => undoFnRef.current?.(), []);
-  const handleRedo = useCallback(() => redoFnRef.current?.(), []);
+  const handleUndo = useCallback(() => {
+    // Prefer the 2D editor's undo (it manages its own pixel history).
+    // If the 2D editor has nothing to undo, pop from the app-level stack
+    // (covers 3D paint strokes and Fix Dark Sides operations).
+    if (canUndo && undoFnRef.current) {
+      undoFnRef.current();
+    } else {
+      const prev = appUndoStack.current.pop();
+      if (prev) {
+        setCurrentImageData((cur) => {
+          if (cur) appRedoStack.current.push(new ImageData(new Uint8ClampedArray(cur.data), cur.width, cur.height));
+          return prev;
+        });
+        setExternalImageData(prev);
+        setCanUndo(appUndoStack.current.length > 0);
+        setCanRedo(true);
+      }
+    }
+  }, [canUndo]);
+
+  const handleRedo = useCallback(() => {
+    if (canRedo && redoFnRef.current) {
+      redoFnRef.current();
+    } else {
+      const next = appRedoStack.current.pop();
+      if (next) {
+        setCurrentImageData((cur) => {
+          if (cur) appUndoStack.current.push(new ImageData(new Uint8ClampedArray(cur.data), cur.width, cur.height));
+          return next;
+        });
+        setExternalImageData(next);
+        setCanUndo(true);
+        setCanRedo(appRedoStack.current.length > 0);
+      }
+    }
+  }, [canRedo]);
+
+  // Global keyboard shortcut — always active regardless of which view is open.
+  // The 2D editor also has its own listener, but only while it is mounted.
+  // Having it here means Ctrl+Z/Y works in 3D paint mode too.
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      if (e.key === "z" && !e.shiftKey) { e.preventDefault(); handleUndo(); }
+      if (e.key === "y" || (e.key === "z" && e.shiftKey)) { e.preventDefault(); handleRedo(); }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [handleUndo, handleRedo]);
 
   return (
     <div className="flex flex-col h-screen overflow-hidden">
@@ -170,6 +266,7 @@ export default function SkinForgeApp() {
           editorState={editorState}
           onColorPick={handleColorPick}
           onPixelsChange={handlePixelsChange}
+          onPixelsPaint={handlePixelsPaint}
           externalImageData={externalImageData}
           onUndoRef={(fn) => { undoFnRef.current = fn; }}
           onRedoRef={(fn) => { redoFnRef.current = fn; }}

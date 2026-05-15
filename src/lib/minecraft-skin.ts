@@ -188,48 +188,49 @@ export function fixAISkinBlackSides(imageData: ImageData): ImageData {
   const d = copy.data;
   const W = copy.width;
 
-  // A pixel needs fixing if it is transparent OR near-black opaque.
-  // Both appear black in the 3D viewer.
-  const needsFill = (i: number) =>
-    d[i+3] < 30 ||                                               // transparent
-    (d[i] < 40 && d[i+1] < 40 && d[i+2] < 40 && d[i+3] > 150); // solid black
+  /**
+   * Returns true only if EVERY pixel in the rect is completely invisible
+   * (alpha === 0).  Minecraft pixel-art skins don't use partial transparency,
+   * so a face is either fully painted or fully empty — there is no in-between.
+   *
+   * We never touch dark/near-black pixels because many skins intentionally
+   * use black outlines or dark armour.  We also never touch a face that even
+   * has ONE non-transparent pixel, because that means the artist painted it.
+   */
+  const isCompletelyEmpty = (r: Rect): boolean => {
+    for (let y = r.y; y < r.y + r.h; y++)
+      for (let x = r.x; x < r.x + r.w; x++)
+        if (d[(y * W + x) * 4 + 3] > 0) return false;
+    return true;
+  };
 
-  /** Average colour of painted (non-fill-needed, opaque) pixels in a rect */
-  const avgColor = (r: Rect): [number,number,number] | null => {
+  /** Average colour of all fully-opaque pixels in a rect (for the fill colour) */
+  const avgColor = (r: Rect): [number, number, number] | null => {
     let rs = 0, gs = 0, bs = 0, n = 0;
     for (let y = r.y; y < r.y + r.h; y++)
       for (let x = r.x; x < r.x + r.w; x++) {
         const i = (y * W + x) * 4;
-        if (!needsFill(i) && d[i+3] > 150) {
-          rs += d[i]; gs += d[i+1]; bs += d[i+2]; n++;
+        if (d[i + 3] > 200) {                 // only count solid pixels
+          rs += d[i]; gs += d[i + 1]; bs += d[i + 2]; n++;
         }
       }
-    return n > 0 ? [Math.round(rs/n), Math.round(gs/n), Math.round(bs/n)] : null;
-  };
-
-  /** Fraction of pixels in a rect that need filling (transparent or near-black) */
-  const fillFraction = (r: Rect): number => {
-    let bad = 0;
-    const total = r.w * r.h;
-    for (let y = r.y; y < r.y + r.h; y++)
-      for (let x = r.x; x < r.x + r.w; x++)
-        if (needsFill((y * W + x) * 4)) bad++;
-    return total > 0 ? bad / total : 0;
+    return n > 0 ? [Math.round(rs / n), Math.round(gs / n), Math.round(bs / n)] : null;
   };
 
   for (const part of getSkinPartDefs()) {
+    // Skip this part if the front face itself has no colour — nothing to copy
     const color = avgColor(part.front);
-    if (!color) continue; // front face itself is all black/transparent — skip
+    if (!color) continue;
 
     for (const side of part.sides) {
-      if (fillFraction(side) < 0.4) continue; // side is mostly painted — leave it alone
+      // Only fill a face that is ENTIRELY empty (alpha === 0 for every pixel).
+      // If even one pixel has been painted, the artist drew that face — leave it alone.
+      if (!isCompletelyEmpty(side)) continue;
 
       for (let y = side.y; y < side.y + side.h; y++)
         for (let x = side.x; x < side.x + side.w; x++) {
           const i = (y * W + x) * 4;
-          if (needsFill(i)) {
-            d[i] = color[0]; d[i+1] = color[1]; d[i+2] = color[2]; d[i+3] = 255;
-          }
+          d[i] = color[0]; d[i + 1] = color[1]; d[i + 2] = color[2]; d[i + 3] = 255;
         }
     }
   }

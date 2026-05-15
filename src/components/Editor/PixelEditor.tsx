@@ -62,22 +62,10 @@ export function PixelEditor({
     }
   }, [externalImageData, setImageData]);
 
-  // Keyboard shortcuts
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.ctrlKey || e.metaKey) {
-        if (e.key === "z") {
-          e.preventDefault();
-          undo();
-        } else if (e.key === "y") {
-          e.preventDefault();
-          redo();
-        }
-      }
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [undo, redo]);
+  // Note: Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z are handled by the global listener in
+  // SkinForgeApp so they work in all view modes (2D, 3D paint, split, etc.).
+  // The app-level handler calls undoFnRef / redoFnRef which point to the undo/redo
+  // functions below, so no duplicate listener is needed here.
 
   // Prevent context menu on canvas
   const handleContextMenu = useCallback(

@@ -13,28 +13,6 @@ interface SkinPainter3DProps {
 }
 
 // ---------------------------------------------------------------------------
-// Outer-layer UV region check
-// Matches the six regions cleared by stripOuterLayer() in minecraft-skin.ts.
-// UV (u,v) in [0,1]×[0,1] with v=1 at the top of the image (Three.js convention).
-// ---------------------------------------------------------------------------
-
-const OUTER_REGIONS = [
-  { u0: 0.50, u1: 1.00, v0: 0.75, v1: 1.00 }, // hat / head outer    x32-64 y0-16
-  { u0: 0.00, u1: 0.25, v0: 0.25, v1: 0.50 }, // right leg outer     x0-16  y32-48
-  { u0: 0.25, u1: 0.50, v0: 0.25, v1: 0.50 }, // body outer (jacket) x16-32 y32-48
-  { u0: 0.625,u1: 0.875,v0: 0.25, v1: 0.50 }, // right arm outer     x40-56 y32-48
-  { u0: 0.00, u1: 0.25, v0: 0.00, v1: 0.25 }, // left leg outer      x0-16  y48-64
-  { u0: 0.75, u1: 1.00, v0: 0.00, v1: 0.25 }, // left arm outer      x48-64 y48-64
-];
-
-function isOuterLayerUV(u: number, v: number): boolean {
-  for (const r of OUTER_REGIONS) {
-    if (u >= r.u0 && u < r.u1 && v >= r.v0 && v < r.v1) return true;
-  }
-  return false;
-}
-
-// ---------------------------------------------------------------------------
 // Pure-JS ray helpers — no Three.js import needed
 // These work on any object with {x,y,z} properties, which THREE.Vector3 has.
 // ---------------------------------------------------------------------------
@@ -138,8 +116,8 @@ export function SkinPainter3D({
   const viewerRef    = useRef<any>(null);
   const canvasRef    = useRef<HTMLCanvasElement | null>(null);
   const [mode, setMode] = useState<"paint" | "rotate">("paint");
-  const [showOuterLayer, setShowOuterLayer] = useState(false);
-  const showOuterLayerRef = useRef(false);
+  const [showOuterLayer, setShowOuterLayer] = useState(true);
+  const showOuterLayerRef = useRef(true);
   const [initError, setInitError] = useState<string | null>(null);
 
   const imageDataRef  = useRef<ImageData | null>(imageData);
@@ -241,18 +219,21 @@ export function SkinPainter3D({
 
     // Collect every triangle hit across the whole player hierarchy, then
     // pick the right one based on the outer-layer visibility setting.
-    // Outer-layer meshes sit slightly outside inner-layer meshes, so the
-    // ray always hits them first (smaller t). When the outer layer is
-    // hidden, those hits land in UV regions that stripOuterLayer() wipes
-    // before the texture is reloaded — paint appears in the 2D editor but
-    // vanishes from the 3D model. Fix: skip outer-UV hits when outer layer
-    // is off and fall through to the inner-layer hit behind it.
-    const allHits: { t: number; u: number; v: number }[] = [];
+    //
+    // skinview3d names its meshes: inner-layer mesh → name="inner",
+    // outer-layer mesh → name="outer" (from skinview3d/libs/model.js).
+    // Outer meshes are scaled ~1.0625× and sit outside inner meshes, so
+    // the ray always hits them first (smallest t). When the outer layer is
+    // hidden, those hits map to UV regions wiped by stripOuterLayer() —
+    // paint appears in the 2D editor but vanishes from the 3D model.
+    // Fix: skip any hit whose mesh is named "outer" when outer layer is off,
+    // and fall through to the inner-layer surface just behind it.
+    const allHits: { t: number; u: number; v: number; meshName: string }[] = [];
 
     playerObject.traverse((obj: any) => {
       if (!obj.isMesh) return;
       const hit = intersectMesh(obj, origin, direction);
-      if (hit) allHits.push(hit);
+      if (hit) allHits.push({ ...hit, meshName: obj.name ?? "" });
     });
 
     // Closest hit first
@@ -260,9 +241,8 @@ export function SkinPainter3D({
 
     const outerVisible = showOuterLayerRef.current;
     for (const hit of allHits) {
-      // If outer layer is hidden and this UV is in an outer-layer region, skip it
-      // and let the next hit (inner-layer surface just behind) be used instead.
-      if (!outerVisible && isOuterLayerUV(hit.u, hit.v)) continue;
+      // If outer layer is hidden and this mesh is an outer-layer mesh, skip it.
+      if (!outerVisible && hit.meshName === "outer") continue;
       paintAtUV(hit.u, hit.v, bt);
       break;
     }

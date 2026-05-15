@@ -10,6 +10,8 @@ interface CenterPanelProps {
   editorState: EditorState;
   onColorPick: (color: string) => void;
   onPixelsChange: (imageData: ImageData) => void;
+  /** Separate callback for 3D-paint strokes — routed to the app-level undo stack */
+  onPixelsPaint?: (imageData: ImageData) => void;
   externalImageData?: ImageData | null;
   onUndoRef?: (fn: () => void) => void;
   onRedoRef?: (fn: () => void) => void;
@@ -24,6 +26,7 @@ export function CenterPanel({
   editorState,
   onColorPick,
   onPixelsChange,
+  onPixelsPaint,
   externalImageData,
   onUndoRef,
   onRedoRef,
@@ -163,7 +166,7 @@ export function CenterPanel({
               bodyType={bodyType}
               color={editorState.color}
               brushSize={brushSize}
-              onPixelsPaint={onPixelsChange}
+              onPixelsPaint={onPixelsPaint ?? onPixelsChange}
             />
           </div>
         )}
