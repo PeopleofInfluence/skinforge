@@ -5,10 +5,10 @@ export default function LandingPage() {
     <div className="min-h-screen bg-forge-bg text-forge-text overflow-x-hidden">
       {/* NAV */}
       <nav className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-6 py-4 bg-forge-bg/80 backdrop-blur-md border-b border-forge-border">
-        <div className="flex items-center gap-2">
+        <a href="/editor" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
           <Logo />
           <span className="text-lg font-bold text-forge-text tracking-wide">SkinForge</span>
-        </div>
+        </a>
         <div className="flex items-center gap-3">
           <a href="/editor" className="text-sm text-forge-text-muted hover:text-forge-text transition-colors">
             Editor
@@ -266,11 +266,11 @@ export default function LandingPage() {
 
       {/* FOOTER */}
       <footer className="px-6 py-8 border-t border-forge-border flex flex-col sm:flex-row items-center justify-between gap-4">
-        <div className="flex items-center gap-2">
+        <a href="/editor" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
           <Logo />
           <span className="text-forge-text font-semibold">SkinForge</span>
           <span className="text-forge-text-muted text-sm">— Minecraft Skin Studio</span>
-        </div>
+        </a>
         <div className="flex items-center gap-6 text-sm text-forge-text-muted">
           <a href="/editor" className="hover:text-forge-text transition-colors">Editor</a>
           <a href="#features" className="hover:text-forge-text transition-colors">Features</a>
