@@ -43,8 +43,10 @@ export default function SkinForgeApp() {
   const [externalImageData, setExternalImageData] = useState<ImageData | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [showAuth, setShowAuth] = useState(false);
-  const [canUndo, setCanUndo] = useState(false);
-  const [canRedo, setCanRedo] = useState(false);
+  const [can2DUndo, setCan2DUndo] = useState(false);
+  const [can2DRedo, setCan2DRedo] = useState(false);
+  const [canAppUndo, setCanAppUndo] = useState(false);
+  const [canAppRedo, setCanAppRedo] = useState(false);
 
   const undoFnRef = useRef<(() => void) | null>(null);
   const redoFnRef = useRef<(() => void) | null>(null);
@@ -106,7 +108,7 @@ export default function SkinForgeApp() {
   const toggleGrid = useCallback(() => setEditorState((s) => ({ ...s, showGrid: !s.showGrid })), []);
   const setBodyType = useCallback((bodyType: BodyType) => setEditorState((s) => ({ ...s, bodyType })), []);
 
-  const handleUndoStateChange = useCallback((u: boolean, r: boolean) => { setCanUndo(u); setCanRedo(r); }, []);
+  const handleUndoStateChange = useCallback((u: boolean, r: boolean) => { setCan2DUndo(u); setCan2DRedo(r); }, []);
   const handleColorPick = useCallback((color: string) => { setColor(color); setTool("pencil"); }, [setColor, setTool]);
 
   // Push to app-level history (used by 3D paint + external ops).
@@ -115,17 +117,20 @@ export default function SkinForgeApp() {
     appUndoStack.current.push(new ImageData(new Uint8ClampedArray(prev.data), prev.width, prev.height));
     if (appUndoStack.current.length > 50) appUndoStack.current.shift();
     appRedoStack.current = [];
-    setCanUndo(true);
-    setCanRedo(false);
+    setCanAppUndo(true);
+    setCanAppRedo(false);
   }, []);
 
   // Called by the 2D pixel editor on every stroke
   const handlePixelsChange = useCallback((imageData: ImageData) => {
     setCurrentImageData(imageData);
-    // 2D editor manages its own history — clear app-level stacks so both
-    // stacks don't fight each other.
+    // 2D editor has its own independent undo stack — invalidate app-level
+    // stacks (3D paint / Fix Dark Sides) since mixing the two sources would
+    // be confusing.
     appUndoStack.current = [];
     appRedoStack.current = [];
+    setCanAppUndo(false);
+    setCanAppRedo(false);
   }, []);
 
   // Called by 3D painter after each paint operation
@@ -134,7 +139,6 @@ export default function SkinForgeApp() {
       if (prev) pushAppHistory(prev);
       return imageData;
     });
-    setCanUndo(true);
   }, [pushAppHistory]);
 
   const handleSkinGenerated = useCallback((imageData: ImageData) => {
@@ -142,6 +146,8 @@ export default function SkinForgeApp() {
     setCurrentImageData(imageData);
     appUndoStack.current = [];
     appRedoStack.current = [];
+    setCanAppUndo(false);
+    setCanAppRedo(false);
   }, []);
 
   const handleClear = useCallback(() => {
@@ -150,6 +156,8 @@ export default function SkinForgeApp() {
     setCurrentImageData(blank);
     appUndoStack.current = [];
     appRedoStack.current = [];
+    setCanAppUndo(false);
+    setCanAppRedo(false);
   }, []);
 
   const handleFixDarkSides = useCallback(() => {
@@ -173,41 +181,42 @@ export default function SkinForgeApp() {
   }, [currentImageData]);
 
   const handleUndo = useCallback(() => {
-    // Prefer the 2D editor's undo (it manages its own pixel history).
-    // If the 2D editor has nothing to undo, pop from the app-level stack
-    // (covers 3D paint strokes and Fix Dark Sides operations).
-    if (canUndo && undoFnRef.current) {
+    // 2D editor tracks its own history — call its undo first.
+    if (can2DUndo && undoFnRef.current) {
       undoFnRef.current();
-    } else {
-      const prev = appUndoStack.current.pop();
-      if (prev) {
-        setCurrentImageData((cur) => {
-          if (cur) appRedoStack.current.push(new ImageData(new Uint8ClampedArray(cur.data), cur.width, cur.height));
-          return prev;
-        });
-        setExternalImageData(prev);
-        setCanUndo(appUndoStack.current.length > 0);
-        setCanRedo(true);
-      }
+      return;
     }
-  }, [canUndo]);
+    // Fall back to app-level stack (3D paint strokes, Fix Dark Sides, etc.)
+    const prev = appUndoStack.current.pop();
+    if (prev) {
+      setCurrentImageData((cur) => {
+        if (cur) appRedoStack.current.push(new ImageData(new Uint8ClampedArray(cur.data), cur.width, cur.height));
+        return prev;
+      });
+      setExternalImageData(prev);
+      setCanAppUndo(appUndoStack.current.length > 0);
+      setCanAppRedo(true);
+    }
+  }, [can2DUndo]);
 
   const handleRedo = useCallback(() => {
-    if (canRedo && redoFnRef.current) {
+    // 2D editor tracks its own redo history — call it first.
+    if (can2DRedo && redoFnRef.current) {
       redoFnRef.current();
-    } else {
-      const next = appRedoStack.current.pop();
-      if (next) {
-        setCurrentImageData((cur) => {
-          if (cur) appUndoStack.current.push(new ImageData(new Uint8ClampedArray(cur.data), cur.width, cur.height));
-          return next;
-        });
-        setExternalImageData(next);
-        setCanUndo(true);
-        setCanRedo(appRedoStack.current.length > 0);
-      }
+      return;
     }
-  }, [canRedo]);
+    // Fall back to app-level redo stack.
+    const next = appRedoStack.current.pop();
+    if (next) {
+      setCurrentImageData((cur) => {
+        if (cur) appUndoStack.current.push(new ImageData(new Uint8ClampedArray(cur.data), cur.width, cur.height));
+        return next;
+      });
+      setExternalImageData(next);
+      setCanAppUndo(true);
+      setCanAppRedo(appRedoStack.current.length > 0);
+    }
+  }, [can2DRedo]);
 
   // Global keyboard shortcut — always active regardless of which view is open.
   // The 2D editor also has its own listener, but only while it is mounted.
@@ -254,8 +263,8 @@ export default function SkinForgeApp() {
           onToggleGrid={toggleGrid}
           onUndo={handleUndo}
           onRedo={handleRedo}
-          canUndo={canUndo}
-          canRedo={canRedo}
+          canUndo={can2DUndo || canAppUndo}
+          canRedo={can2DRedo || canAppRedo}
           onClear={handleClear}
           onExport={handleExport}
           onFixDarkSides={handleFixDarkSides}
