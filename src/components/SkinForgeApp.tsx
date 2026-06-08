@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { LeftPanel } from "@/components/Layout/LeftPanel";
 import { CenterPanel } from "@/components/Layout/CenterPanel";
 import { RightPanel } from "@/components/Layout/RightPanel";
@@ -8,6 +8,7 @@ import { AuthModal } from "@/components/Auth/AuthModal";
 import { UserMenu } from "@/components/Auth/UserMenu";
 import { supabase } from "@/lib/supabase";
 import { createBlankSkin, canvasToPng, fixAISkinBlackSides } from "@/lib/minecraft-skin";
+import { v4 as uuidv4 } from "uuid";
 import type { EditorState, Tool, LayerName, BodyType, Layer } from "@/types";
 import type { User } from "@supabase/supabase-js";
 
@@ -94,6 +95,41 @@ export default function SkinForgeApp() {
     }, 500);
     return () => clearTimeout(id);
   }, [currentImageData]);
+
+  // Stable draft ID per user — stored in localStorage so the same DB row
+  // gets upserted every session rather than creating a new one each time.
+  const draftSkinId = useMemo(() => {
+    if (!user) return null;
+    const key = `skinforge-draft-id-${user.id}`;
+    let id = localStorage.getItem(key);
+    if (!id) { id = uuidv4(); localStorage.setItem(key, id); }
+    return id;
+  }, [user]);
+
+  // Auto-save to Supabase library as a "Draft" entry whenever pixels change.
+  // Only runs for logged-in users; debounced at 3 s to avoid hammering the DB.
+  useEffect(() => {
+    if (!currentImageData || !user || !draftSkinId) return;
+    const timer = setTimeout(async () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = 64; canvas.height = 64;
+      canvas.getContext("2d")!.putImageData(currentImageData, 0, 0);
+      const pixels = canvas.toDataURL("image/png").replace("data:image/png;base64,", "");
+      const now = new Date().toISOString();
+      await supabase.from("skins").upsert({
+        id: draftSkinId,
+        user_id: user.id,
+        name: "Draft",
+        tags: ["draft"],
+        pixels,
+        body_type: editorState.bodyType,
+        preview_url: null,
+        updated_at: now,
+        created_at: now,
+      });
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [currentImageData, user, draftSkinId, editorState.bodyType]);
 
   const setTool = useCallback((tool: Tool) => setEditorState((s) => ({ ...s, tool })), []);
   const setColor = useCallback((color: string) => setEditorState((s) => ({ ...s, color })), []);

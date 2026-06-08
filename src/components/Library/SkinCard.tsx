@@ -25,10 +25,10 @@ export function SkinCard({ skin, onLoad, onDelete }: SkinCardProps) {
         onClick={handleLoad}
         title="Load this skin"
       >
-        {skin.previewUrl ? (
+        {skin.pixels ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={skin.previewUrl}
+            src={`data:image/png;base64,${skin.pixels}`}
             alt={skin.name}
             className="h-full object-contain"
             style={{ imageRendering: "pixelated" }}
