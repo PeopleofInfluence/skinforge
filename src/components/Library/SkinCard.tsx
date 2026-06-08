@@ -6,10 +6,13 @@ import { loadSkinImageData } from "@/lib/minecraft-skin";
 interface SkinCardProps {
   skin: SkinData;
   onLoad: (imageData: ImageData) => void;
-  onDelete: (id: string) => void;
+  onDelete?: (id: string) => void;
+  onTogglePublic?: (id: string, makePublic: boolean) => void;
+  /** If true this card belongs to the current user (show delete + toggle) */
+  isOwner?: boolean;
 }
 
-export function SkinCard({ skin, onLoad, onDelete }: SkinCardProps) {
+export function SkinCard({ skin, onLoad, onDelete, onTogglePublic, isOwner }: SkinCardProps) {
   const handleLoad = async () => {
     const imageData = await loadSkinImageData(`data:image/png;base64,${skin.pixels}`);
     onLoad(imageData);
@@ -38,28 +41,47 @@ export function SkinCard({ skin, onLoad, onDelete }: SkinCardProps) {
         )}
       </div>
 
-      {/* Info */}
+      {/* Info row */}
       <div className="px-2 py-1.5 flex items-center justify-between gap-1">
         <div className="flex-1 min-w-0">
           <p className="text-xs text-forge-text truncate font-medium">{skin.name}</p>
           <p className="text-xs text-forge-text-muted">{date}</p>
         </div>
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onDelete(skin.id);
-          }}
-          className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-300 transition-all"
-          title="Delete"
-        >
-          <TrashIcon />
-        </button>
+
+        {/* Owner actions */}
+        {isOwner && (
+          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
+            {/* Public / Private toggle */}
+            {onTogglePublic && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onTogglePublic(skin.id, !skin.isPublic); }}
+                className={`transition-colors ${
+                  skin.isPublic
+                    ? "text-forge-accent hover:text-forge-accent/70"
+                    : "text-forge-text-muted hover:text-forge-text"
+                }`}
+                title={skin.isPublic ? "Public — click to make private" : "Private — click to make public"}
+              >
+                {skin.isPublic ? <GlobeIcon /> : <LockIcon />}
+              </button>
+            )}
+            {onDelete && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onDelete(skin.id); }}
+                className="text-red-400 hover:text-red-300 transition-colors"
+                title="Delete"
+              >
+                <TrashIcon />
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Tags */}
-      {skin.tags.length > 0 && (
+      {skin.tags.filter((t) => t !== "draft").length > 0 && (
         <div className="px-2 pb-1.5 flex flex-wrap gap-0.5">
-          {skin.tags.slice(0, 3).map((tag) => (
+          {skin.tags.filter((t) => t !== "draft").slice(0, 3).map((tag) => (
             <span
               key={tag}
               className="text-xs bg-forge-border text-forge-text-muted px-1.5 py-0.5 rounded-full"
@@ -89,6 +111,23 @@ function TrashIcon() {
   return (
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
       <polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+    </svg>
+  );
+}
+function GlobeIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <circle cx="12" cy="12" r="10" />
+      <line x1="2" y1="12" x2="22" y2="12" />
+      <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+    </svg>
+  );
+}
+function LockIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
     </svg>
   );
 }

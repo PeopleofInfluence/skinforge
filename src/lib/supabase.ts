@@ -17,6 +17,7 @@ export type Database = {
           pixels: string;
           body_type: "classic" | "slim";
           preview_url: string | null;
+          is_public: boolean;
           created_at: string;
           updated_at: string;
         };

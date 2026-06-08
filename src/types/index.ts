@@ -33,6 +33,7 @@ export interface SkinData {
   updatedAt: string;
   userId?: string;
   previewUrl?: string;
+  isPublic?: boolean;
 }
 
 export interface PromptHistoryItem {

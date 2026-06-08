@@ -123,6 +123,7 @@ export default function SkinForgeApp() {
         tags: ["draft"],
         pixels,
         body_type: editorState.bodyType,
+        is_public: false,
         preview_url: null,
         updated_at: now,
         created_at: now,
