@@ -44,6 +44,7 @@ export default function SkinForgeApp() {
   const [externalImageData, setExternalImageData] = useState<ImageData | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [showAuth, setShowAuth] = useState(false);
+  const [authMode, setAuthMode] = useState<"signin" | "signup">("signin");
   const [can2DUndo, setCan2DUndo] = useState(false);
   const [can2DRedo, setCan2DRedo] = useState(false);
   const [canAppUndo, setCanAppUndo] = useState(false);
@@ -294,7 +295,10 @@ export default function SkinForgeApp() {
             </button>
           )}
           {user ? <UserMenu user={user} /> : (
-            <button onClick={() => setShowAuth(true)} className="btn-primary text-xs">Sign in</button>
+            <div className="flex items-center gap-2">
+              <button onClick={() => { setAuthMode("signin"); setShowAuth(true); }} className="btn-secondary text-xs">Sign in</button>
+              <button onClick={() => { setAuthMode("signup"); setShowAuth(true); }} className="btn-primary text-xs">Sign up</button>
+            </div>
           )}
         </div>
       </header>
@@ -338,7 +342,7 @@ export default function SkinForgeApp() {
         />
       </main>
 
-      {showAuth && <AuthModal onClose={() => setShowAuth(false)} />}
+      {showAuth && <AuthModal onClose={() => setShowAuth(false)} initialMode={authMode} />}
     </div>
   );
 }

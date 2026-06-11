@@ -5,12 +5,13 @@ import { supabase } from "@/lib/supabase";
 
 interface AuthModalProps {
   onClose: () => void;
+  initialMode?: "signin" | "signup";
 }
 
 type Mode = "signin" | "signup" | "reset";
 
-export function AuthModal({ onClose }: AuthModalProps) {
-  const [mode, setMode] = useState<Mode>("signin");
+export function AuthModal({ onClose, initialMode = "signin" }: AuthModalProps) {
+  const [mode, setMode] = useState<Mode>(initialMode);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [username, setUsername] = useState("");
