@@ -34,7 +34,7 @@ export default function SkinForgeApp() {
     zoom: 8,
     activeLayer: "head",
     layers: INITIAL_LAYERS,
-    bodyType: "classic",
+    bodyType: "slim",
     showGrid: true,
     brushSize: 1,
     fillTolerance: 0,

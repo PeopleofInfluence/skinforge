@@ -163,16 +163,13 @@ export default function LandingPage() {
         <div className="rounded-3xl border border-forge-accent/30 bg-forge-panel p-10 sm:p-16 flex flex-col sm:flex-row items-center gap-10">
           <div className="text-7xl sm:text-8xl">🧩</div>
           <div className="flex flex-col gap-4">
-            <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-forge-accent/20 text-forge-accent border border-forge-accent/30 w-fit">
-              Coming Soon
-            </span>
             <h2 className="text-3xl sm:text-4xl font-bold text-forge-text">Mix &amp; Match Skins</h2>
             <p className="text-forge-text-muted text-lg leading-relaxed max-w-xl">
               Take the head from one skin, the torso from another, and the legs from a third.
               SkinForge lets you mix and match body parts from any skins to build something
               completely unique — no other skin editor does this.
             </p>
-            <span className="text-forge-text-muted text-sm">Join the waitlist to be first to try it →</span>
+            <a href="/editor" className="text-forge-accent font-semibold hover:underline w-fit">Try it in the editor →</a>
           </div>
         </div>
       </section>
@@ -182,14 +179,12 @@ export default function LandingPage() {
         <div className="rounded-3xl border border-forge-border bg-forge-panel p-10 sm:p-16 flex flex-col sm:flex-row-reverse items-center gap-10">
           <div className="text-7xl sm:text-8xl">🧊</div>
           <div className="flex flex-col gap-4">
-            <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-forge-accent/20 text-forge-accent border border-forge-accent/30 w-fit">
-              Coming Soon
-            </span>
             <h2 className="text-3xl sm:text-4xl font-bold text-forge-text">Paint Directly on 3D</h2>
             <p className="text-forge-text-muted text-lg leading-relaxed max-w-xl">
               Rotate the 3D character and click to paint directly on the model.
               No more guessing which pixel maps to which body part — just paint what you see.
             </p>
+            <a href="/editor" className="text-forge-accent font-semibold hover:underline w-fit">Try it in the editor →</a>
           </div>
         </div>
       </section>
@@ -320,19 +315,19 @@ const FEATURES = [
     icon: "🧩",
     title: "Mix & Match Parts",
     description: "Copy the head from one skin, the torso from another. Combine body parts from multiple skins to create something unique.",
-    comingSoon: true,
+    comingSoon: false,
   },
   {
     icon: "📚",
     title: "Skin Library",
-    description: "Browse thousands of community skins for inspiration, or load any player's skin by their Minecraft username.",
-    comingSoon: true,
+    description: "Save your skins to the cloud, browse your collection, and share them with the community.",
+    comingSoon: false,
   },
   {
     icon: "🖌️",
     title: "3D Direct Painting",
     description: "Click directly on the 3D character to paint. Rotate and paint the back, sides, and top — no UV map guessing.",
-    comingSoon: true,
+    comingSoon: false,
   },
   {
     icon: "🛒",
@@ -363,21 +358,21 @@ const STEPS = [
 const PLANS = [
   {
     name: "Starter",
-    price: "£0.99",
+    price: "$0.99",
     credits: "10",
     popular: false,
     features: ["10 AI generations", "Full pixel editor", "3D preview", "PNG export"],
   },
   {
     name: "Creator",
-    price: "£3.99",
+    price: "$3.99",
     credits: "50",
     popular: true,
     features: ["50 AI generations", "Full pixel editor", "3D preview", "PNG export", "AI remix"],
   },
   {
     name: "Pro",
-    price: "£9.99",
+    price: "$9.99",
     credits: "200",
     popular: false,
     features: ["200 AI generations", "Full pixel editor", "3D preview", "PNG export", "AI remix", "Priority support"],
