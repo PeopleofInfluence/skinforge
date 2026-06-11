@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { rgbaToHex } from "@/lib/minecraft-skin";
 
 const PALETTE: string[] = [
@@ -24,6 +24,8 @@ interface ColorPickerProps {
 
 export function ColorPicker({ color, onChange }: ColorPickerProps) {
   const [customColor, setCustomColor] = useState(color);
+
+  useEffect(() => { setCustomColor(color); }, [color]);
 
   const handleNativeChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
