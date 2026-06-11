@@ -22,9 +22,9 @@ export function SkinLibrary({
 }: SkinLibraryProps) {
   const {
     skins, communitySkins,
-    loading, communityLoading,
+    loading, communityLoading, communityHasMore,
     error,
-    saveSkin, deleteSkin, togglePublic, refreshCommunity,
+    saveSkin, deleteSkin, togglePublic, refreshCommunity, loadMoreCommunity,
   } = useSkinLibrary(userId);
 
   const [view, setView] = useState<LibView>("mine");
@@ -332,7 +332,7 @@ export function SkinLibrary({
           )}
 
           {!communityLoading && filteredCommunity.length > 0 && (
-            <div className="flex-1 overflow-y-auto">
+            <div className="flex-1 overflow-y-auto flex flex-col gap-2">
               <div className="grid grid-cols-2 gap-2">
                 {filteredCommunity.map((skin) => (
                   <SkinCard
@@ -345,6 +345,14 @@ export function SkinLibrary({
                   />
                 ))}
               </div>
+              {communityHasMore && (
+                <button
+                  onClick={loadMoreCommunity}
+                  className="w-full py-2 text-xs text-forge-text-muted hover:text-forge-text border border-forge-border hover:border-forge-accent/50 rounded-lg transition-colors"
+                >
+                  Load more
+                </button>
+              )}
             </div>
           )}
         </div>

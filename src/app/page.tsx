@@ -329,12 +329,6 @@ const FEATURES = [
     description: "Click directly on the 3D character to paint. Rotate and paint the back, sides, and top — no UV map guessing.",
     comingSoon: false,
   },
-  {
-    icon: "🛒",
-    title: "Skin Marketplace",
-    description: "Sell your AI-generated skins to other players and earn credits. Buy unique skins from talented creators.",
-    comingSoon: true,
-  },
 ];
 
 const STEPS = [

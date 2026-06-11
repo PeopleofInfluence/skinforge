@@ -306,6 +306,12 @@ export default function SkinForgeApp() {
         </div>
         <div className="flex items-center gap-2">
           {currentImageData && (
+            <span className="flex items-center gap-1.5 text-xs text-forge-text-muted">
+              <span className="w-1.5 h-1.5 rounded-full bg-yellow-400 animate-pulse" />
+              Unsaved
+            </span>
+          )}
+          {currentImageData && (
             <button onClick={handleExport} className="btn-secondary flex items-center gap-1.5 text-xs">
               <DownloadIcon /> Export PNG
             </button>

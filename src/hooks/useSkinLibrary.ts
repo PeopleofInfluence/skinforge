@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import type { SkinData, BodyType } from "@/types";
 import { v4 as uuidv4 } from "uuid";
@@ -24,7 +24,9 @@ export function useSkinLibrary(userId: string | null) {
   const [communitySkins, setCommunitySkins] = useState<SkinData[]>([]);
   const [loading, setLoading] = useState(false);
   const [communityLoading, setCommunityLoading] = useState(false);
+  const [communityHasMore, setCommunityHasMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const communityOffsetRef = useRef(0);
 
   // ── Fetch the current user's own skins ──────────────────────────────────
   const fetchSkins = useCallback(async () => {
@@ -42,18 +44,21 @@ export function useSkinLibrary(userId: string | null) {
     setLoading(false);
   }, [userId]);
 
+  const PAGE_SIZE = 24;
+
   // ── Fetch all public skins from everyone (with creator username) ────────
-  const fetchCommunitySkins = useCallback(async () => {
+  const fetchCommunitySkins = useCallback(async (reset = true) => {
     setCommunityLoading(true);
+    const offset = reset ? 0 : communityOffsetRef.current;
+
     const { data: skinsData } = await supabase
       .from("skins")
       .select("*")
       .eq("is_public", true)
       .order("updated_at", { ascending: false })
-      .limit(100);
+      .range(offset, offset + PAGE_SIZE - 1);
 
     if (skinsData && skinsData.length > 0) {
-      // Batch-fetch profiles for all unique creators
       const userIds = [...new Set(skinsData.map((s) => s.user_id as string))];
       const { data: profilesData } = await supabase
         .from("profiles")
@@ -64,14 +69,17 @@ export function useSkinLibrary(userId: string | null) {
         (profilesData ?? []).map((p) => [p.user_id as string, p.username as string])
       );
 
-      setCommunitySkins(
-        skinsData.map((row) => ({
-          ...rowToSkin(row),
-          creatorUsername: usernameMap.get(row.user_id as string),
-        }))
-      );
+      const newSkins = skinsData.map((row) => ({
+        ...rowToSkin(row),
+        creatorUsername: usernameMap.get(row.user_id as string),
+      }));
+
+      communityOffsetRef.current = offset + skinsData.length;
+      setCommunityHasMore(skinsData.length === PAGE_SIZE);
+      setCommunitySkins((prev) => reset ? newSkins : [...prev, ...newSkins]);
     } else {
-      setCommunitySkins([]);
+      if (reset) setCommunitySkins([]);
+      setCommunityHasMore(false);
     }
     setCommunityLoading(false);
   }, []);
@@ -163,11 +171,13 @@ export function useSkinLibrary(userId: string | null) {
     communitySkins,
     loading,
     communityLoading,
+    communityHasMore,
     error,
     saveSkin,
     deleteSkin,
     togglePublic,
     refresh: fetchSkins,
     refreshCommunity: fetchCommunitySkins,
+    loadMoreCommunity: () => fetchCommunitySkins(false),
   };
 }
