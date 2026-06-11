@@ -123,24 +123,22 @@ export function CenterPanel({
 
       {/* Content area */}
       <div className="flex flex-1 min-h-0">
-        {/* Pixel editor */}
-        {(viewMode === "editor" || viewMode === "split") && (
-          <div
-            className={`flex-1 min-w-0 overflow-hidden ${
-              viewMode === "split" ? "border-r border-forge-border" : ""
-            }`}
-          >
-            <PixelEditor
-              editorState={editorState}
-              onColorPick={onColorPick}
-              onPixelsChange={onPixelsChange}
-              externalImageData={externalImageData}
-              onUndoRef={onUndoRef}
-              onRedoRef={onRedoRef}
-              onUndoStateChange={onUndoStateChange}
-            />
-          </div>
-        )}
+        {/* Pixel editor — always mounted so undo/redo history survives mode switches */}
+        <div
+          className={`flex-1 min-w-0 overflow-hidden ${
+            viewMode === "split" ? "border-r border-forge-border" : ""
+          } ${(viewMode === "preview" || viewMode === "paint3d") ? "hidden" : ""}`}
+        >
+          <PixelEditor
+            editorState={editorState}
+            onColorPick={onColorPick}
+            onPixelsChange={onPixelsChange}
+            externalImageData={externalImageData}
+            onUndoRef={onUndoRef}
+            onRedoRef={onRedoRef}
+            onUndoStateChange={onUndoStateChange}
+          />
+        </div>
 
         {/* 3D Preview */}
         {(viewMode === "preview" || viewMode === "split") && (

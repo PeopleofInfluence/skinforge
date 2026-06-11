@@ -267,18 +267,34 @@ export default function SkinForgeApp() {
     return () => window.removeEventListener("beforeunload", handler);
   }, [currentImageData]);
 
-  // Global keyboard shortcut — always active regardless of which view is open.
-  // The 2D editor also has its own listener, but only while it is mounted.
-  // Having it here means Ctrl+Z/Y works in 3D paint mode too.
+  // Global keyboard shortcuts — active regardless of which view is open.
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (!(e.ctrlKey || e.metaKey)) return;
-      if (e.key === "z" && !e.shiftKey) { e.preventDefault(); handleUndo(); }
-      if (e.key === "y" || (e.key === "z" && e.shiftKey)) { e.preventDefault(); handleRedo(); }
+      // Don't fire shortcuts when typing in an input/textarea
+      const tag = (e.target as HTMLElement).tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA") return;
+
+      if (e.ctrlKey || e.metaKey) {
+        if (e.key === "z" && !e.shiftKey) { e.preventDefault(); handleUndo(); }
+        if (e.key === "y" || (e.key === "z" && e.shiftKey)) { e.preventDefault(); handleRedo(); }
+        return;
+      }
+
+      switch (e.key.toLowerCase()) {
+        case "p": setTool("pencil"); break;
+        case "e": setTool("eraser"); break;
+        case "f": setTool("fill"); break;
+        case "i": setTool("eyedropper"); break;
+        case "b": setTool("brighten"); break;
+        case "d": setTool("darken"); break;
+        case "g": toggleGrid(); break;
+        case "+": case "=": zoomIn(); break;
+        case "-": zoomOut(); break;
+      }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [handleUndo, handleRedo]);
+  }, [handleUndo, handleRedo, setTool, toggleGrid, zoomIn, zoomOut]);
 
   return (
     <div className="flex flex-col h-screen overflow-hidden">
