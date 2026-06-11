@@ -50,7 +50,8 @@ export function usePixelEditor({
   const onPixelsChangeRef = useRef(onPixelsChange);
 
   useEffect(() => { imageDataRef.current = imageData; }, [imageData]);
-  useEffect(() => { editorStateRef.current = editorState; }, [editorState]);
+  // Sync immediately — don't wait for next effect flush
+  editorStateRef.current = editorState;
   useEffect(() => { onColorPickRef.current = onColorPick; }, [onColorPick]);
   useEffect(() => { onPixelsChangeRef.current = onPixelsChange; }, [onPixelsChange]);
 
@@ -81,8 +82,9 @@ export function usePixelEditor({
 
       const { showGrid, zoom } = editorStateRef.current;
       if (showGrid && zoom >= 4) {
-        ctx.strokeStyle = "rgba(255,255,255,0.08)";
-        ctx.lineWidth = 0.5 / zoom;
+        // 1 CSS pixel grid lines regardless of zoom level
+        ctx.strokeStyle = "rgba(255,255,255,0.25)";
+        ctx.lineWidth = 1 / zoom;
         for (let x = 0; x <= SKIN_WIDTH; x++) {
           ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, SKIN_HEIGHT); ctx.stroke();
         }
