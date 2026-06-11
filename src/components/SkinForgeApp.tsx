@@ -68,6 +68,13 @@ export default function SkinForgeApp() {
     return () => sub.subscription.unsubscribe();
   }, []);
 
+  // Auto-open auth modal from URL param (?auth=signin or ?auth=signup)
+  useEffect(() => {
+    const param = new URLSearchParams(window.location.search).get("auth");
+    if (param === "signup") { setAuthMode("signup"); setShowAuth(true); }
+    else if (param === "signin") { setAuthMode("signin"); setShowAuth(true); }
+  }, []);
+
   // Load autosave on mount
   useEffect(() => {
     const saved = localStorage.getItem("skinforge-autosave");

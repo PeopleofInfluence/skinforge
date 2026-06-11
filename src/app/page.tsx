@@ -13,11 +13,14 @@ export default function LandingPage() {
           <a href="/editor" className="text-sm text-forge-text-muted hover:text-forge-text transition-colors">
             Editor
           </a>
+          <a href="/editor?auth=signin" className="text-sm text-forge-text-muted hover:text-forge-text transition-colors">
+            Sign in
+          </a>
           <a
-            href="/editor"
+            href="/editor?auth=signup"
             className="text-sm px-4 py-2 rounded-lg bg-forge-accent hover:bg-forge-accent-hover text-white font-semibold transition-colors"
           >
-            Start Creating Free
+            Sign up free
           </a>
         </div>
       </nav>

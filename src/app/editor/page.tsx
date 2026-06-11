@@ -1,4 +1,5 @@
 import dynamic from "next/dynamic";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 const SkinForgeApp = dynamic(() => import("@/components/SkinForgeApp"), {
   ssr: false,
@@ -10,5 +11,9 @@ const SkinForgeApp = dynamic(() => import("@/components/SkinForgeApp"), {
 });
 
 export default function EditorPage() {
-  return <SkinForgeApp />;
+  return (
+    <ErrorBoundary>
+      <SkinForgeApp />
+    </ErrorBoundary>
+  );
 }
