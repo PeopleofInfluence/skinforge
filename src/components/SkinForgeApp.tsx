@@ -51,6 +51,7 @@ export default function SkinForgeApp() {
   const [canAppUndo, setCanAppUndo] = useState(false);
   const [canAppRedo, setCanAppRedo] = useState(false);
   const [hasEdited, setHasEdited] = useState(false);
+  const [credits, setCredits] = useState<number | null>(null);
 
   const undoFnRef = useRef<(() => void) | null>(null);
   const redoFnRef = useRef<(() => void) | null>(null);
@@ -69,6 +70,36 @@ export default function SkinForgeApp() {
     });
     return () => sub.subscription.unsubscribe();
   }, []);
+
+  // Fetch credits when user changes
+  useEffect(() => {
+    if (!user) { setCredits(null); return; }
+    supabase
+      .from("profiles")
+      .select("credits")
+      .eq("id", user.id)
+      .single()
+      .then(({ data }) => { if (data) setCredits(data.credits as number); });
+  }, [user]);
+
+  // Handle ?payment=success redirect from Stripe — show credits added
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const payment = params.get("payment");
+    const added = parseInt(params.get("credits") ?? "0", 10);
+    if (payment === "success" && added > 0 && user) {
+      // Re-fetch credits to get accurate count after Stripe webhook
+      supabase
+        .from("profiles")
+        .select("credits")
+        .eq("id", user.id)
+        .single()
+        .then(({ data }) => { if (data) setCredits(data.credits as number); });
+      // Clean up URL
+      window.history.replaceState({}, "", "/editor");
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
 
   // Auto-open auth modal from URL param (?auth=signin or ?auth=signup)
   useEffect(() => {
@@ -377,6 +408,8 @@ export default function SkinForgeApp() {
           onBodyTypeChange={setBodyType}
           onSkinGenerated={handleSkinGenerated}
           userId={user?.id ?? null}
+          credits={credits}
+          onCreditsChange={setCredits}
           currentImageData={currentImageData}
         />
       </main>

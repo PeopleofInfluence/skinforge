@@ -8,6 +8,11 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 export type Database = {
   public: {
     Tables: {
+      profiles: {
+        Row: { id: string; credits: number; created_at: string };
+        Insert: Omit<Database["public"]["Tables"]["profiles"]["Row"], "created_at">;
+        Update: Partial<Database["public"]["Tables"]["profiles"]["Insert"]>;
+      };
       skins: {
         Row: {
           id: string;

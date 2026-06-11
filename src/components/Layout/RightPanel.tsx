@@ -12,6 +12,8 @@ interface RightPanelProps {
   onBodyTypeChange: (bt: BodyType) => void;
   onSkinGenerated: (imageData: ImageData) => void;
   userId: string | null;
+  credits: number | null;
+  onCreditsChange: (remaining: number) => void;
   currentImageData: ImageData | null;
 }
 
@@ -22,6 +24,8 @@ export function RightPanel({
   onBodyTypeChange,
   onSkinGenerated,
   userId,
+  credits,
+  onCreditsChange,
   currentImageData,
 }: RightPanelProps) {
   const [tab, setTab] = useState<Tab>("ai");
@@ -79,6 +83,9 @@ export function RightPanel({
           <AIGenerator
             bodyType={bodyType}
             onSkinGenerated={onSkinGenerated}
+            userId={userId}
+            credits={credits}
+            onCreditsChange={onCreditsChange}
           />
         )}
         {tab === "upload" && (
