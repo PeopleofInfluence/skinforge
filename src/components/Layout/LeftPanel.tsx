@@ -21,6 +21,7 @@ interface LeftPanelProps {
   onFixDarkSides: () => void;
   onBrushSizeChange: (size: number) => void;
   onFillToleranceChange: (t: number) => void;
+  onToggleSymmetry: () => void;
 }
 
 type Tab = "tools" | "colour";
@@ -41,6 +42,7 @@ export function LeftPanel({
   onFixDarkSides,
   onBrushSizeChange,
   onFillToleranceChange,
+  onToggleSymmetry,
 }: LeftPanelProps) {
   const [tab, setTab] = useState<Tab>("tools");
 
@@ -90,6 +92,8 @@ export function LeftPanel({
             onClear={onClear}
             onExport={onExport}
             onFixDarkSides={onFixDarkSides}
+            symmetry={editorState.symmetry}
+            onToggleSymmetry={onToggleSymmetry}
           />
         )}
         {tab === "colour" && (

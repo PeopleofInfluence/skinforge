@@ -55,6 +55,7 @@ export interface EditorState {
   showGrid: boolean;
   brushSize: number;
   fillTolerance: number;
+  symmetry: boolean;
 }
 
 export interface HistoryEntry {

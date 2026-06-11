@@ -38,6 +38,7 @@ export default function SkinForgeApp() {
     showGrid: true,
     brushSize: 1,
     fillTolerance: 0,
+    symmetry: false,
   });
 
   const [currentImageData, setCurrentImageData] = useState<ImageData | null>(null);
@@ -151,6 +152,7 @@ export default function SkinForgeApp() {
   const zoomIn = useCallback(() => setEditorState((s) => ({ ...s, zoom: Math.min(s.zoom + 2, 20) })), []);
   const zoomOut = useCallback(() => setEditorState((s) => ({ ...s, zoom: Math.max(s.zoom - 2, 2) })), []);
   const toggleGrid = useCallback(() => setEditorState((s) => ({ ...s, showGrid: !s.showGrid })), []);
+  const toggleSymmetry = useCallback(() => setEditorState((s) => ({ ...s, symmetry: !s.symmetry })), []);
   const setBodyType = useCallback((bodyType: BodyType) => setEditorState((s) => ({ ...s, bodyType })), []);
 
   const handleUndoStateChange = useCallback((u: boolean, r: boolean) => { setCan2DUndo(u); setCan2DRedo(r); }, []);
@@ -349,6 +351,7 @@ export default function SkinForgeApp() {
           onFixDarkSides={handleFixDarkSides}
           onBrushSizeChange={setBrushSize}
           onFillToleranceChange={setFillTolerance}
+          onToggleSymmetry={toggleSymmetry}
         />
         <CenterPanel
           editorState={editorState}

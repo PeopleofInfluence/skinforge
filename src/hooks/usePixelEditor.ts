@@ -203,7 +203,11 @@ export function usePixelEditor({
       commitHistory();
       isDrawing.current = true;
       lastPos.current = pos;
-      const updated = paintPixel(imageDataRef.current, pos.x, pos.y, tool, color, editorStateRef.current.brushSize);
+      const bs = editorStateRef.current.brushSize;
+      let updated = paintPixel(imageDataRef.current, pos.x, pos.y, tool, color, bs);
+      if (editorStateRef.current.symmetry) {
+        updated = paintPixel(updated, SKIN_WIDTH - 1 - pos.x, pos.y, tool, color, bs);
+      }
       setImageData(updated);
       onPixelsChangeRef.current?.(updated);
     },
@@ -231,10 +235,14 @@ export function usePixelEditor({
 
         let current = imageDataRef.current;
         const bs = editorStateRef.current.brushSize;
+        const sym = editorStateRef.current.symmetry;
         for (let i = 0; i <= steps; i++) {
           const ix = Math.round(last.x + (dx * i) / steps);
           const iy = Math.round(last.y + (dy * i) / steps);
           current = paintPixel(current, ix, iy, tool, color, bs);
+          if (sym) {
+            current = paintPixel(current, SKIN_WIDTH - 1 - ix, iy, tool, color, bs);
+          }
         }
         lastPos.current = pos;
         setImageData(current);

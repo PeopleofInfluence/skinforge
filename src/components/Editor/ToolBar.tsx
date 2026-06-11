@@ -15,6 +15,8 @@ interface ToolBarProps {
   onZoomOut: () => void;
   showGrid: boolean;
   onToggleGrid: () => void;
+  symmetry: boolean;
+  onToggleSymmetry: () => void;
   onUndo: () => void;
   onRedo: () => void;
   canUndo: boolean;
@@ -47,6 +49,8 @@ export function ToolBar({
   onZoomOut,
   showGrid,
   onToggleGrid,
+  symmetry,
+  onToggleSymmetry,
   onUndo,
   onRedo,
   canUndo,
@@ -185,6 +189,20 @@ export function ToolBar({
       >
         <GridIcon />
         <span>Grid</span>
+      </button>
+
+      {/* Symmetry toggle */}
+      <button
+        onClick={onToggleSymmetry}
+        title="Mirror painting horizontally across the skin"
+        className={`flex items-center gap-2 px-3 py-1.5 rounded text-xs transition-colors ${
+          symmetry
+            ? "text-forge-accent bg-forge-accent/10"
+            : "text-forge-text-muted hover:text-forge-text hover:bg-forge-border"
+        }`}
+      >
+        <SymmetryIcon />
+        <span>Symmetry</span>
       </button>
 
       <div className="border-t border-forge-border my-1" />
@@ -366,6 +384,17 @@ function HelpIcon() {
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
       <circle cx="12" cy="12" r="10" />
       <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" /><line x1="12" y1="17" x2="12.01" y2="17" />
+    </svg>
+  );
+}
+function SymmetryIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <line x1="12" y1="3" x2="12" y2="21" />
+      <path d="M5 8l-3 4 3 4" />
+      <path d="M19 8l3 4-3 4" />
+      <line x1="2" y1="12" x2="10" y2="12" />
+      <line x1="14" y1="12" x2="22" y2="12" />
     </svg>
   );
 }
