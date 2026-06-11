@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import type { Tool } from "@/types";
 
 interface ToolBarProps {
@@ -54,6 +55,14 @@ export function ToolBar({
   onExport,
   onFixDarkSides,
 }: ToolBarProps) {
+  const [confirmClear, setConfirmClear] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
+
+  const handleClearClick = () => {
+    if (confirmClear) { onClear(); setConfirmClear(false); }
+    else { setConfirmClear(true); setTimeout(() => setConfirmClear(false), 3000); }
+  };
+
   return (
     <div className="flex flex-col gap-1">
       {/* Drawing tools */}
@@ -194,12 +203,16 @@ export function ToolBar({
 
       {/* Danger zone */}
       <button
-        onClick={onClear}
-        className="flex items-center gap-2 px-3 py-1.5 rounded text-xs text-red-400 hover:bg-red-900/20 transition-colors"
-        title="Clear canvas"
+        onClick={handleClearClick}
+        className={`flex items-center gap-2 px-3 py-1.5 rounded text-xs transition-colors ${
+          confirmClear
+            ? "bg-red-500 text-white"
+            : "text-red-400 hover:bg-red-900/20"
+        }`}
+        title={confirmClear ? "Click again to confirm" : "Clear canvas"}
       >
         <TrashIcon />
-        <span>Clear</span>
+        <span>{confirmClear ? "Sure?" : "Clear"}</span>
       </button>
 
       <button
@@ -210,6 +223,52 @@ export function ToolBar({
         <DownloadIcon />
         <span>Export</span>
       </button>
+
+      <div className="border-t border-forge-border my-1" />
+
+      {/* Help */}
+      <button
+        onClick={() => setShowHelp(true)}
+        className="flex items-center gap-2 px-3 py-1.5 rounded text-xs text-forge-text-muted hover:text-forge-text hover:bg-forge-border transition-colors"
+        title="Keyboard shortcuts"
+      >
+        <HelpIcon />
+        <span>Shortcuts</span>
+      </button>
+
+      {/* Shortcuts overlay */}
+      {showHelp && (
+        <div
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center"
+          onClick={() => setShowHelp(false)}
+        >
+          <div className="bg-forge-panel border border-forge-border rounded-xl shadow-2xl p-5 w-72" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm font-semibold text-forge-text">Keyboard Shortcuts</h3>
+              <button onClick={() => setShowHelp(false)} className="text-forge-text-muted hover:text-forge-text text-lg leading-none">×</button>
+            </div>
+            <div className="flex flex-col gap-1">
+              {[
+                ["P", "Pencil"],
+                ["E", "Eraser"],
+                ["F", "Fill"],
+                ["I", "Eyedropper"],
+                ["B", "Brighten"],
+                ["D", "Darken"],
+                ["Ctrl+Z", "Undo"],
+                ["Ctrl+Y / Ctrl+Shift+Z", "Redo"],
+                ["+ / −", "Zoom in / out"],
+                ["G", "Toggle grid (in editor)"],
+              ].map(([key, label]) => (
+                <div key={key} className="flex items-center justify-between py-1 border-b border-forge-border/40 last:border-0">
+                  <span className="text-xs text-forge-text-muted">{label}</span>
+                  <kbd className="text-xs bg-forge-border px-1.5 py-0.5 rounded font-mono text-forge-text">{key}</kbd>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -299,6 +358,14 @@ function DarkenIcon() {
   return (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
       <path d="M21 12.79A9 9 0 1 1 11.21 3a7 7 0 0 0 9.79 9.79z" />
+    </svg>
+  );
+}
+function HelpIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <circle cx="12" cy="12" r="10" />
+      <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" /><line x1="12" y1="17" x2="12.01" y2="17" />
     </svg>
   );
 }

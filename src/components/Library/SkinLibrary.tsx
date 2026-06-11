@@ -60,6 +60,7 @@ export function SkinLibrary({
 
   const filteredSkins = useMemo(() => {
     return skins.filter((s) => {
+      if ((s.tags ?? []).includes("draft")) return false;
       const matchTag = !activeTag || (s.tags ?? []).includes(activeTag);
       const q = search.toLowerCase();
       const matchSearch =
