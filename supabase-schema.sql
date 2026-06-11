@@ -8,6 +8,7 @@ create table if not exists public.skins (
   pixels      text not null,              -- base64 PNG data
   body_type   text not null default 'classic' check (body_type in ('classic', 'slim')),
   preview_url text,
+  is_public   boolean not null default false,
   created_at  timestamptz not null default now(),
   updated_at  timestamptz not null default now()
 );
@@ -15,12 +16,18 @@ create table if not exists public.skins (
 -- Enable Row Level Security
 alter table public.skins enable row level security;
 
--- Users can only read/write their own skins
+-- Users can manage their own skins
 create policy "Users can manage their own skins"
   on public.skins
   for all
   using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
+
+-- Anyone can read public skins (for the Community tab)
+create policy "Public skins viewable by all"
+  on public.skins
+  for select
+  using (is_public = true);
 
 -- Auto-update updated_at
 create or replace function update_updated_at()

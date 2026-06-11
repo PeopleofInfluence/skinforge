@@ -255,6 +255,17 @@ export default function SkinForgeApp() {
     }
   }, [can2DRedo]);
 
+  // Warn before leaving with unsaved work
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (!currentImageData) return;
+      e.preventDefault();
+      e.returnValue = "You have unsaved changes. Are you sure you want to leave?";
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [currentImageData]);
+
   // Global keyboard shortcut — always active regardless of which view is open.
   // The 2D editor also has its own listener, but only while it is mounted.
   // Having it here means Ctrl+Z/Y works in 3D paint mode too.
@@ -293,8 +304,6 @@ export default function SkinForgeApp() {
           editorState={editorState}
           onToolChange={setTool}
           onColorChange={setColor}
-          onLayerSelect={setLayer}
-          onToggleLayerVisibility={toggleLayerVisibility}
           onZoomIn={zoomIn}
           onZoomOut={zoomOut}
           onToggleGrid={toggleGrid}

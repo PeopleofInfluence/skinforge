@@ -42,17 +42,37 @@ export function useSkinLibrary(userId: string | null) {
     setLoading(false);
   }, [userId]);
 
-  // ── Fetch all public skins from everyone ────────────────────────────────
+  // ── Fetch all public skins from everyone (with creator username) ────────
   const fetchCommunitySkins = useCallback(async () => {
     setCommunityLoading(true);
-    const { data, error: err } = await supabase
+    const { data: skinsData } = await supabase
       .from("skins")
       .select("*")
       .eq("is_public", true)
       .order("updated_at", { ascending: false })
       .limit(100);
 
-    if (!err) { setCommunitySkins((data ?? []).map(rowToSkin)); }
+    if (skinsData && skinsData.length > 0) {
+      // Batch-fetch profiles for all unique creators
+      const userIds = [...new Set(skinsData.map((s) => s.user_id as string))];
+      const { data: profilesData } = await supabase
+        .from("profiles")
+        .select("user_id, username")
+        .in("user_id", userIds);
+
+      const usernameMap = new Map(
+        (profilesData ?? []).map((p) => [p.user_id as string, p.username as string])
+      );
+
+      setCommunitySkins(
+        skinsData.map((row) => ({
+          ...rowToSkin(row),
+          creatorUsername: usernameMap.get(row.user_id as string),
+        }))
+      );
+    } else {
+      setCommunitySkins([]);
+    }
     setCommunityLoading(false);
   }, []);
 

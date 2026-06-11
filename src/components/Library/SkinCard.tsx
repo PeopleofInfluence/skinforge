@@ -45,7 +45,9 @@ export function SkinCard({ skin, onLoad, onDelete, onTogglePublic, isOwner }: Sk
       <div className="px-2 py-1.5 flex items-center justify-between gap-1">
         <div className="flex-1 min-w-0">
           <p className="text-xs text-forge-text truncate font-medium">{skin.name}</p>
-          <p className="text-xs text-forge-text-muted">{date}</p>
+          <p className="text-xs text-forge-text-muted">
+            {!isOwner && skin.creatorUsername ? `by ${skin.creatorUsername}` : date}
+          </p>
         </div>
 
         {/* Owner actions */}

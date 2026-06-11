@@ -34,6 +34,7 @@ export interface SkinData {
   userId?: string;
   previewUrl?: string;
   isPublic?: boolean;
+  creatorUsername?: string;
 }
 
 export interface PromptHistoryItem {

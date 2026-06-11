@@ -26,9 +26,11 @@ export function SkinPreview3D({
   // Keep refs so async callbacks always read the latest values
   const imageDataRef = useRef<ImageData | null>(imageData);
   const bodyTypeRef = useRef<BodyType>(bodyType);
+  const animationRef = useRef<AnimationType>(animation);
 
   useEffect(() => { imageDataRef.current = imageData; }, [imageData]);
   useEffect(() => { bodyTypeRef.current = bodyType; }, [bodyType]);
+  useEffect(() => { animationRef.current = animation; }, [animation]);
 
 
   useEffect(() => {
@@ -102,6 +104,16 @@ export function SkinPreview3D({
       // Load skin if it was already set before viewer finished initialising
       if (imageDataRef.current) {
         loadSkinToViewer(imageDataRef.current, bodyTypeRef.current);
+      }
+
+      // Apply animation — must happen after viewer init because the animation
+      // useEffect may have fired before the viewer was ready (race condition).
+      const anim = animationRef.current;
+      switch (anim) {
+        case "walk": viewer.animation = skinview3d.WalkingAnimation; break;
+        case "run":  viewer.animation = skinview3d.RunningAnimation; break;
+        case "fly":  viewer.animation = skinview3d.FlyingAnimation;  break;
+        default:     viewer.animation = skinview3d.IdleAnimation;    break;
       }
     })();
 
