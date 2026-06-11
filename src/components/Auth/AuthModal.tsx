@@ -34,8 +34,13 @@ export function AuthModal({ onClose }: AuthModalProps) {
           user_id: data.user.id,
           username: username.trim(),
         });
-        setMessage("Account created! Check your email to confirm, then sign in.");
-        setMode("signin");
+        // If session exists, email confirmation is disabled — user is signed in immediately
+        if (data.session) {
+          onClose();
+        } else {
+          setMessage("Account created! Check your email to confirm, then sign in.");
+          setMode("signin");
+        }
       }
     } else {
       const { error: err } = await supabase.auth.signInWithPassword({ email, password });
