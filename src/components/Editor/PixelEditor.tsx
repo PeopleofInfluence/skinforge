@@ -94,6 +94,8 @@ export function PixelEditor({
                 ? "crosshair"
                 : editorState.tool === "fill"
                 ? "cell"
+                : editorState.tool === "select"
+                ? "default"
                 : "crosshair",
           }}
           onMouseDown={handlePointerDown}

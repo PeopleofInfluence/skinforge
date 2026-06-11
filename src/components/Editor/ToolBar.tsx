@@ -33,6 +33,7 @@ const TOOLS: { id: Tool; label: string; icon: React.ReactNode }[] = [
   { id: "eyedropper", label: "Eyedropper (I)", icon: <EyedropperIcon /> },
   { id: "brighten", label: "Brighten (B)", icon: <BrightenIcon /> },
   { id: "darken", label: "Darken (D)", icon: <DarkenIcon /> },
+  { id: "select", label: "Select (S)", icon: <SelectIcon /> },
 ];
 
 const BRUSH_TOOLS: Tool[] = ["pencil", "eraser", "brighten", "darken"];
@@ -273,16 +274,28 @@ export function ToolBar({
                 ["I", "Eyedropper"],
                 ["B", "Brighten"],
                 ["D", "Darken"],
+                ["S", "Select"],
                 ["Ctrl+Z", "Undo"],
                 ["Ctrl+Y / Ctrl+Shift+Z", "Redo"],
                 ["+ / −", "Zoom in / out"],
-                ["G", "Toggle grid (in editor)"],
-              ].map(([key, label]) => (
-                <div key={key} className="flex items-center justify-between py-1 border-b border-forge-border/40 last:border-0">
-                  <span className="text-xs text-forge-text-muted">{label}</span>
-                  <kbd className="text-xs bg-forge-border px-1.5 py-0.5 rounded font-mono text-forge-text">{key}</kbd>
-                </div>
-              ))}
+                ["G", "Toggle grid"],
+                ["— With Select tool —", ""],
+                ["Ctrl+C", "Copy selection"],
+                ["Ctrl+X", "Cut selection"],
+                ["Ctrl+V", "Paste"],
+                ["Delete", "Erase selection"],
+              ].map(([key, label]) =>
+                label === "" ? (
+                  <div key={key} className="pt-2 pb-0.5">
+                    <span className="text-xs font-semibold text-forge-text-muted uppercase tracking-wider">{key}</span>
+                  </div>
+                ) : (
+                  <div key={key} className="flex items-center justify-between py-1 border-b border-forge-border/40 last:border-0">
+                    <span className="text-xs text-forge-text-muted">{label}</span>
+                    <kbd className="text-xs bg-forge-border px-1.5 py-0.5 rounded font-mono text-forge-text">{key}</kbd>
+                  </div>
+                )
+              )}
             </div>
           </div>
         </div>
@@ -384,6 +397,13 @@ function HelpIcon() {
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
       <circle cx="12" cy="12" r="10" />
       <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" /><line x1="12" y1="17" x2="12.01" y2="17" />
+    </svg>
+  );
+}
+function SelectIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <rect x="3" y="3" width="18" height="18" rx="1" strokeDasharray="4 2" />
     </svg>
   );
 }

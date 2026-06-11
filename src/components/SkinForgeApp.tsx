@@ -50,6 +50,7 @@ export default function SkinForgeApp() {
   const [can2DRedo, setCan2DRedo] = useState(false);
   const [canAppUndo, setCanAppUndo] = useState(false);
   const [canAppRedo, setCanAppRedo] = useState(false);
+  const [hasEdited, setHasEdited] = useState(false);
 
   const undoFnRef = useRef<(() => void) | null>(null);
   const redoFnRef = useRef<(() => void) | null>(null);
@@ -170,6 +171,7 @@ export default function SkinForgeApp() {
 
   // Called by the 2D pixel editor on every stroke
   const handlePixelsChange = useCallback((imageData: ImageData) => {
+    setHasEdited(true);
     setCurrentImageData(imageData);
     // 2D editor has its own independent undo stack — invalidate app-level
     // stacks (3D paint / Fix Dark Sides) since mixing the two sources would
@@ -182,6 +184,7 @@ export default function SkinForgeApp() {
 
   // Called by 3D painter after each paint operation
   const handlePixelsPaint = useCallback((imageData: ImageData) => {
+    setHasEdited(true);
     setCurrentImageData((prev) => {
       if (prev) pushAppHistory(prev);
       return imageData;
@@ -189,6 +192,7 @@ export default function SkinForgeApp() {
   }, [pushAppHistory]);
 
   const handleSkinGenerated = useCallback((imageData: ImageData) => {
+    setHasEdited(true);
     setExternalImageData(imageData);
     setCurrentImageData(imageData);
     appUndoStack.current = [];
@@ -201,6 +205,7 @@ export default function SkinForgeApp() {
     const blank = createBlankSkin();
     setExternalImageData(blank);
     setCurrentImageData(blank);
+    setHasEdited(false);
     appUndoStack.current = [];
     appRedoStack.current = [];
     setCanAppUndo(false);
@@ -209,6 +214,7 @@ export default function SkinForgeApp() {
 
   const handleFixDarkSides = useCallback(() => {
     if (!currentImageData) return;
+    setHasEdited(true);
     pushAppHistory(currentImageData);
     const fixed = fixAISkinBlackSides(currentImageData);
     setExternalImageData(fixed);
@@ -296,6 +302,7 @@ export default function SkinForgeApp() {
         case "i": setTool("eyedropper"); break;
         case "b": setTool("brighten"); break;
         case "d": setTool("darken"); break;
+        case "s": setTool("select"); break;
         case "g": toggleGrid(); break;
         case "+": case "=": zoomIn(); break;
         case "-": zoomOut(); break;
@@ -314,7 +321,7 @@ export default function SkinForgeApp() {
           <span className="text-xs text-forge-text-muted hidden sm:block">— Minecraft Skin Studio</span>
         </div>
         <div className="flex items-center gap-2">
-          {currentImageData && (
+          {hasEdited && (
             <span className="flex items-center gap-1.5 text-xs text-forge-text-muted">
               <span className="w-1.5 h-1.5 rounded-full bg-yellow-400 animate-pulse" />
               Unsaved

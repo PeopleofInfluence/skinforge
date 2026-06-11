@@ -43,6 +43,11 @@ export function usePixelEditor({
   const historyRef = useRef<ImageData[]>([]);
   const futureRef = useRef<ImageData[]>([]);
 
+  const selectionStartRef = useRef<{ x: number; y: number } | null>(null);
+  const selectionRectRef = useRef<{ x: number; y: number; w: number; h: number } | null>(null);
+  const clipboardRef = useRef<{ data: Uint8ClampedArray; w: number; h: number; ox: number; oy: number } | null>(null);
+  const [selectionRect, setSelectionRect] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
+
   // Keep refs to current values — avoids ALL stale closure issues
   const imageDataRef = useRef<ImageData>(imageData);
   const editorStateRef = useRef<EditorState>(editorState);
@@ -92,6 +97,23 @@ export function usePixelEditor({
           ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(SKIN_WIDTH, y); ctx.stroke();
         }
       }
+
+      // Selection overlay — drawn on top of grid
+      const sel = selectionRectRef.current;
+      if (sel && sel.w > 0 && sel.h > 0) {
+        ctx.save();
+        ctx.lineWidth = 1.5 / zoom;
+        // White dashes
+        ctx.strokeStyle = "rgba(255,255,255,0.9)";
+        ctx.setLineDash([3 / zoom, 2 / zoom]);
+        ctx.strokeRect(sel.x, sel.y, sel.w, sel.h);
+        // Black dashes offset to create marching-ants effect
+        ctx.strokeStyle = "rgba(0,0,0,0.6)";
+        ctx.lineDashOffset = 5 / zoom;
+        ctx.strokeRect(sel.x, sel.y, sel.w, sel.h);
+        ctx.setLineDash([]);
+        ctx.restore();
+      }
     },
     [canvasRef]
   );
@@ -103,6 +125,21 @@ export function usePixelEditor({
     render(imageDataRef.current);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editorState.showGrid, editorState.zoom]);
+
+  // Re-render when selection rect changes
+  useEffect(() => {
+    render(imageDataRef.current);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectionRect]);
+
+  // Clear selection when switching away from select tool
+  useEffect(() => {
+    if (editorState.tool !== "select") {
+      selectionRectRef.current = null;
+      selectionStartRef.current = null;
+      setSelectionRect(null);
+    }
+  }, [editorState.tool]);
 
   const getPixelCoords = useCallback(
     (e: React.MouseEvent<HTMLCanvasElement> | MouseEvent) => {
@@ -173,6 +210,14 @@ export function usePixelEditor({
       // Always read tool/color from ref — never stale
       const { tool, color } = editorStateRef.current;
 
+      if (tool === "select") {
+        selectionStartRef.current = pos;
+        selectionRectRef.current = null;
+        setSelectionRect(null);
+        isDrawing.current = true;
+        return;
+      }
+
       if (tool === "eyedropper") {
         const current = imageDataRef.current;
         const idx = (pos.y * SKIN_WIDTH + pos.x) * 4;
@@ -221,6 +266,18 @@ export function usePixelEditor({
       if (!pos) return;
 
       const { tool, color } = editorStateRef.current;
+
+      if (tool === "select" && isDrawing.current && selectionStartRef.current) {
+        const start = selectionStartRef.current;
+        const x = Math.min(start.x, pos.x);
+        const y = Math.min(start.y, pos.y);
+        const w = Math.abs(pos.x - start.x) + 1;
+        const h = Math.abs(pos.y - start.y) + 1;
+        const rect = { x, y, w, h };
+        selectionRectRef.current = rect;
+        setSelectionRect(rect);
+        return;
+      }
 
       if (
         tool === "pencil" ||
@@ -290,6 +347,88 @@ export function usePixelEditor({
     },
     [setImageData]
   );
+
+  const copySelection = useCallback(() => {
+    const sel = selectionRectRef.current;
+    if (!sel) return;
+    const src = imageDataRef.current;
+    const pixels = new Uint8ClampedArray(sel.w * sel.h * 4);
+    for (let row = 0; row < sel.h; row++) {
+      for (let col = 0; col < sel.w; col++) {
+        const srcIdx = ((sel.y + row) * SKIN_WIDTH + (sel.x + col)) * 4;
+        const dstIdx = (row * sel.w + col) * 4;
+        pixels[dstIdx]     = src.data[srcIdx];
+        pixels[dstIdx + 1] = src.data[srcIdx + 1];
+        pixels[dstIdx + 2] = src.data[srcIdx + 2];
+        pixels[dstIdx + 3] = src.data[srcIdx + 3];
+      }
+    }
+    clipboardRef.current = { data: pixels, w: sel.w, h: sel.h, ox: sel.x, oy: sel.y };
+  }, []);
+
+  const deleteSelection = useCallback(() => {
+    const sel = selectionRectRef.current;
+    if (!sel) return;
+    commitHistory();
+    const newData = cloneImageData(imageDataRef.current);
+    for (let row = 0; row < sel.h; row++) {
+      for (let col = 0; col < sel.w; col++) {
+        const idx = ((sel.y + row) * SKIN_WIDTH + (sel.x + col)) * 4;
+        newData.data[idx] = 0;
+        newData.data[idx + 1] = 0;
+        newData.data[idx + 2] = 0;
+        newData.data[idx + 3] = 0;
+      }
+    }
+    setImageData(newData);
+    onPixelsChangeRef.current?.(newData);
+  }, [commitHistory, setImageData]);
+
+  const cutSelection = useCallback(() => {
+    copySelection();
+    deleteSelection();
+  }, [copySelection, deleteSelection]);
+
+  const pasteClipboard = useCallback(() => {
+    const clip = clipboardRef.current;
+    if (!clip) return;
+    commitHistory();
+    const newData = cloneImageData(imageDataRef.current);
+    for (let row = 0; row < clip.h; row++) {
+      for (let col = 0; col < clip.w; col++) {
+        const srcIdx = (row * clip.w + col) * 4;
+        const px = clip.ox + col;
+        const py = clip.oy + row;
+        if (px < 0 || px >= SKIN_WIDTH || py < 0 || py >= SKIN_HEIGHT) continue;
+        const dstIdx = (py * SKIN_WIDTH + px) * 4;
+        newData.data[dstIdx]     = clip.data[srcIdx];
+        newData.data[dstIdx + 1] = clip.data[srcIdx + 1];
+        newData.data[dstIdx + 2] = clip.data[srcIdx + 2];
+        newData.data[dstIdx + 3] = clip.data[srcIdx + 3];
+      }
+    }
+    setImageData(newData);
+    onPixelsChangeRef.current?.(newData);
+  }, [commitHistory, setImageData]);
+
+  // Clipboard keyboard shortcuts — only active when select tool is chosen
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (editorStateRef.current.tool !== "select") return;
+      const tag = (e.target as HTMLElement).tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA") return;
+
+      if (e.ctrlKey || e.metaKey) {
+        if (e.key === "c") { e.preventDefault(); copySelection(); }
+        else if (e.key === "x") { e.preventDefault(); cutSelection(); }
+        else if (e.key === "v") { e.preventDefault(); pasteClipboard(); }
+      } else if (e.key === "Delete" || e.key === "Backspace") {
+        deleteSelection();
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [copySelection, cutSelection, pasteClipboard, deleteSelection]);
 
   return {
     imageData,
