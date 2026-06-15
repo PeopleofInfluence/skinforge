@@ -6,6 +6,7 @@ import { CenterPanel } from "@/components/Layout/CenterPanel";
 import { RightPanel } from "@/components/Layout/RightPanel";
 import { AuthModal } from "@/components/Auth/AuthModal";
 import { UserMenu } from "@/components/Auth/UserMenu";
+import { SaveDialog } from "@/components/Library/SaveDialog";
 import { supabase } from "@/lib/supabase";
 import { createBlankSkin, canvasToPng, fixAISkinBlackSides } from "@/lib/minecraft-skin";
 import { v4 as uuidv4 } from "uuid";
@@ -52,6 +53,7 @@ export default function SkinForgeApp() {
   const [canAppRedo, setCanAppRedo] = useState(false);
   const [hasEdited, setHasEdited] = useState(false);
   const [credits, setCredits] = useState<number | null>(null);
+  const [showSave, setShowSave] = useState(false);
 
   const undoFnRef = useRef<(() => void) | null>(null);
   const redoFnRef = useRef<(() => void) | null>(null);
@@ -358,6 +360,11 @@ export default function SkinForgeApp() {
               Unsaved
             </span>
           )}
+          {currentImageData && user && (
+            <button onClick={() => setShowSave(true)} className="btn-secondary flex items-center gap-1.5 text-xs">
+              <SaveIcon /> Save
+            </button>
+          )}
           {currentImageData && (
             <button onClick={handleExport} className="btn-secondary flex items-center gap-1.5 text-xs">
               <DownloadIcon /> Export PNG
@@ -390,6 +397,8 @@ export default function SkinForgeApp() {
           onBrushSizeChange={setBrushSize}
           onFillToleranceChange={setFillTolerance}
           onToggleSymmetry={toggleSymmetry}
+          onLayerChange={setLayer}
+          onToggleLayerVisibility={toggleLayerVisibility}
         />
         <CenterPanel
           editorState={editorState}
@@ -415,6 +424,15 @@ export default function SkinForgeApp() {
       </main>
 
       {showAuth && <AuthModal onClose={() => setShowAuth(false)} initialMode={authMode} />}
+      {showSave && currentImageData && user && (
+        <SaveDialog
+          imageData={currentImageData}
+          bodyType={editorState.bodyType}
+          userId={user.id}
+          onSaved={() => setHasEdited(false)}
+          onClose={() => setShowSave(false)}
+        />
+      )}
     </div>
   );
 }
@@ -434,6 +452,16 @@ function DownloadIcon() {
   return (
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
       <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" />
+    </svg>
+  );
+}
+
+function SaveIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+      <polyline points="17 21 17 13 7 13 7 21" />
+      <polyline points="7 3 7 8 15 8" />
     </svg>
   );
 }

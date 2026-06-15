@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { ToolBar } from "@/components/Editor/ToolBar";
 import { ColorPicker } from "@/components/Editor/ColorPicker";
-import type { EditorState, Tool } from "@/types";
+import { LayerPanel } from "@/components/Editor/LayerPanel";
+import type { EditorState, Tool, LayerName } from "@/types";
 
 interface LeftPanelProps {
   editorState: EditorState;
@@ -22,9 +23,11 @@ interface LeftPanelProps {
   onBrushSizeChange: (size: number) => void;
   onFillToleranceChange: (t: number) => void;
   onToggleSymmetry: () => void;
+  onLayerChange: (name: LayerName) => void;
+  onToggleLayerVisibility: (name: LayerName) => void;
 }
 
-type Tab = "tools" | "colour";
+type Tab = "tools" | "colour" | "layers";
 
 export function LeftPanel({
   editorState,
@@ -43,12 +46,15 @@ export function LeftPanel({
   onBrushSizeChange,
   onFillToleranceChange,
   onToggleSymmetry,
+  onLayerChange,
+  onToggleLayerVisibility,
 }: LeftPanelProps) {
   const [tab, setTab] = useState<Tab>("tools");
 
   const tabs: { id: Tab; label: string }[] = [
     { id: "tools", label: "Tools" },
     { id: "colour", label: "Colour" },
+    { id: "layers", label: "Layers" },
   ];
 
   return (
@@ -98,6 +104,14 @@ export function LeftPanel({
         )}
         {tab === "colour" && (
           <ColorPicker color={editorState.color} onChange={onColorChange} />
+        )}
+        {tab === "layers" && (
+          <LayerPanel
+            activeLayer={editorState.activeLayer}
+            layers={editorState.layers}
+            onSelectLayer={onLayerChange}
+            onToggleVisibility={onToggleLayerVisibility}
+          />
         )}
       </div>
     </div>
