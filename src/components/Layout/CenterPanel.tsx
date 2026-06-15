@@ -34,7 +34,7 @@ export function CenterPanel({
   previewImageData,
   bodyType,
 }: CenterPanelProps) {
-  const [viewMode, setViewMode] = useState<ViewMode>("split");
+  const [viewMode, setViewMode] = useState<ViewMode>("paint3d");
   const [animation, setAnimation] = useState<AnimationType>("idle");
   const [rotating, setRotating] = useState(true);
 
@@ -43,7 +43,6 @@ export function CenterPanel({
   const modes: { id: ViewMode; label: string }[] = [
     { id: "editor", label: "2D Edit" },
     { id: "split", label: "Split" },
-    { id: "preview", label: "3D View" },
     { id: "paint3d", label: "🖌️ 3D Paint" },
   ];
 
@@ -69,7 +68,7 @@ export function CenterPanel({
         </div>
 
         {/* Preview controls */}
-        {(viewMode === "preview" || viewMode === "split") && (
+        {viewMode === "split" && (
           <div className="flex items-center gap-2">
             <select
               value={animation}
@@ -127,7 +126,7 @@ export function CenterPanel({
         <div
           className={`flex-1 min-w-0 overflow-hidden ${
             viewMode === "split" ? "border-r border-forge-border" : ""
-          } ${(viewMode === "preview" || viewMode === "paint3d") ? "hidden" : ""}`}
+          } ${viewMode === "paint3d" ? "hidden" : ""}`}
         >
           <PixelEditor
             editorState={editorState}
@@ -140,13 +139,9 @@ export function CenterPanel({
           />
         </div>
 
-        {/* 3D Preview */}
-        {(viewMode === "preview" || viewMode === "split") && (
-          <div
-            className={`${
-              viewMode === "split" ? "w-56 shrink-0" : "flex-1"
-            } bg-forge-bg flex items-center justify-center p-4`}
-          >
+        {/* 3D Preview — only in split mode */}
+        {viewMode === "split" && (
+          <div className="w-56 shrink-0 bg-forge-bg flex items-center justify-center p-4">
             <SkinPreview3D
               imageData={previewImageData}
               bodyType={bodyType}

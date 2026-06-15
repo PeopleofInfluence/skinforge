@@ -115,7 +115,6 @@ export function SkinPainter3D({
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerRef    = useRef<any>(null);
   const canvasRef    = useRef<HTMLCanvasElement | null>(null);
-  const [mode, setMode] = useState<"paint" | "rotate">("paint");
   const [showOuterLayer, setShowOuterLayer] = useState(true);
   const showOuterLayerRef = useRef(true);
   const [initError, setInitError] = useState<string | null>(null);
@@ -124,13 +123,11 @@ export function SkinPainter3D({
   const colorRef      = useRef(color);
   const brushSizeRef  = useRef(brushSize);
   const bodyTypeRef   = useRef<BodyType>(bodyType);
-  const modeRef       = useRef<"paint" | "rotate">("paint");
 
   useEffect(() => { imageDataRef.current = imageData; }, [imageData]);
   useEffect(() => { colorRef.current = color; }, [color]);
   useEffect(() => { brushSizeRef.current = brushSize; }, [brushSize]);
   useEffect(() => { bodyTypeRef.current = bodyType; }, [bodyType]);
-  useEffect(() => { modeRef.current = mode; }, [mode]);
 
   useEffect(() => {
     showOuterLayerRef.current = showOuterLayer;
@@ -306,19 +303,26 @@ export function SkinPainter3D({
           rotY = Math.atan2(viewer.camera.position.x, viewer.camera.position.z);
         }
 
-        // Mouse handlers
+        // Mouse handlers — left-click paints, right-click drag rotates
+        let buttonDown: number | null = null;
+
         const onMouseDown = (e: MouseEvent) => {
-          isMouseDown = true;
+          e.preventDefault();
+          buttonDown = e.button;
           lastX = e.clientX; lastY = e.clientY;
-          if (modeRef.current === "paint") {
-            e.preventDefault();
+          if (e.button === 0) {
             raycastAndPaint(e, bodyTypeRef.current);
+            vc.style.cursor = "crosshair";
+          } else if (e.button === 2) {
+            vc.style.cursor = "grabbing";
           }
         };
 
         const onMouseMove = (e: MouseEvent) => {
-          if (!isMouseDown) return;
-          if (modeRef.current === "rotate") {
+          if (buttonDown === null) return;
+          if (buttonDown === 0) {
+            raycastAndPaint(e, bodyTypeRef.current);
+          } else if (buttonDown === 2) {
             const dx = e.clientX - lastX;
             const dy = e.clientY - lastY;
             lastX = e.clientX; lastY = e.clientY;
@@ -333,22 +337,27 @@ export function SkinPainter3D({
               cam.position.y = rotX * 40;
               cam.lookAt(0, 0, 0);
             }
-          } else {
-            e.preventDefault();
-            raycastAndPaint(e, bodyTypeRef.current);
           }
+          lastX = e.clientX; lastY = e.clientY;
         };
 
-        const onMouseUp = () => { isMouseDown = false; };
+        const onMouseUp = () => {
+          buttonDown = null;
+          vc.style.cursor = "crosshair";
+        };
+
+        const onContextMenu = (e: MouseEvent) => e.preventDefault();
 
         vc.addEventListener("mousedown", onMouseDown);
         vc.addEventListener("mousemove", onMouseMove);
+        vc.addEventListener("contextmenu", onContextMenu);
         window.addEventListener("mouseup", onMouseUp);
 
         cleanupFns = [
           () => ro.disconnect(),
           () => vc.removeEventListener("mousedown", onMouseDown),
           () => vc.removeEventListener("mousemove", onMouseMove),
+          () => vc.removeEventListener("contextmenu", onContextMenu),
           () => window.removeEventListener("mouseup", onMouseUp),
           () => {
             if (container.contains(vc)) container.removeChild(vc);
@@ -377,25 +386,6 @@ export function SkinPainter3D({
       {/* Toolbar */}
       <div className="flex items-center justify-center gap-2 py-2 border-b border-forge-border bg-forge-panel shrink-0 flex-wrap px-3">
         <button
-          onClick={() => setMode("rotate")}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
-            mode === "rotate" ? "bg-forge-accent text-white" : "text-forge-text-muted hover:text-forge-text bg-forge-border/40"
-          }`}
-        >
-          <RotateIcon /> Rotate
-        </button>
-        <button
-          onClick={() => setMode("paint")}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
-            mode === "paint" ? "bg-forge-accent text-white" : "text-forge-text-muted hover:text-forge-text bg-forge-border/40"
-          }`}
-        >
-          🖌️ Paint
-        </button>
-
-        <div className="w-px h-4 bg-forge-border" />
-
-        <button
           onClick={() => setShowOuterLayer((v) => !v)}
           title="Toggle outer layer (jacket / overlays)"
           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
@@ -405,20 +395,18 @@ export function SkinPainter3D({
           <LayersIcon /> {showOuterLayer ? "Hide Outer Layer" : "Show Outer Layer"}
         </button>
 
-        {mode === "paint" && (
-          <div
-            className="w-4 h-4 rounded-sm border border-forge-border shrink-0"
-            style={{ backgroundColor: color }}
-            title="Current colour"
-          />
-        )}
+        <div
+          className="w-4 h-4 rounded-sm border border-forge-border shrink-0"
+          style={{ backgroundColor: color }}
+          title="Current colour"
+        />
       </div>
 
       {/* 3D canvas area */}
       <div
         ref={containerRef}
         className="relative flex-1 overflow-hidden"
-        style={{ cursor: mode === "paint" ? "crosshair" : "grab", background: "#1a1a2e" }}
+        style={{ cursor: "crosshair", background: "#1a1a2e" }}
       >
         {initError && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-forge-bg/90 pointer-events-none p-4 z-10">
@@ -433,18 +421,10 @@ export function SkinPainter3D({
           </div>
         )}
         <div className="absolute bottom-4 left-1/2 -translate-x-1/2 text-xs text-white/60 bg-black/40 backdrop-blur-sm px-4 py-2 rounded-full pointer-events-none border border-white/10 whitespace-nowrap z-10">
-          {mode === "paint" ? "🖌️ Click or drag on the model to paint" : "🖱️ Drag to rotate the model"}
+          Left-click to paint · Right-click drag to rotate
         </div>
       </div>
     </div>
-  );
-}
-
-function RotateIcon() {
-  return (
-    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2" />
-    </svg>
   );
 }
 
